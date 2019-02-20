@@ -1,1 +1,1 @@
-jupytext --set-formats jupyter_scripts//ipynb,scripts//py --sync ../jupyter_scripts/*.ipynb
+jupytext --set-formats jupyter_scripts//ipynb,ifis_tools//py --sync /jupyter_scripts/*.ipynb

@@ -85,6 +85,7 @@ class ASYNCH_results:
 
 # ## Asynch project manager
 
+# +
 class ASYNCH_project:
     
     def __init__(self, name = None, date1 = None, date2 = None, linkID = None, initial = 'Initial',
@@ -221,5 +222,8 @@ class ASYNCH_project:
         # SEt the runfile for the project.
         if setRunFile:
             self.__ASYNCH_setRunFile__()
+
+   
+# -
 
 

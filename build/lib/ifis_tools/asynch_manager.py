@@ -2,7 +2,7 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: jupyter_scripts//ipynb,scripts//py
+#     formats: jupyter_scripts//ipynb,ifis_tools//py
 #     text_representation:
 #       extension: .py
 #       format_name: light
@@ -23,24 +23,23 @@ from datetime import timezone, datetime
 import os 
 import fileinput
 import numpy as np 
-import auxiliar as aux
+from ifis_tools import auxiliar as aux
 
 # # Global variables 
 
 # +
 # 190 original parameters
-Param190 = [6, 0.75, 0.33, -0.20, 0.50, 0.1, 2.2917e-5]
-Param254 = [0.33, 0.2, -0.1, 0.02, 2.0425e-6, 0.02, 0.5, 0.10, 0.0, 99.0, 3.0, 0.75]
+Parameters = {'190': [6, 0.75, 0.33, -0.20, 0.50, 0.1, 2.2917e-5],
+    '254':[0.33, 0.2, -0.1, 0.02, 2.0425e-6, 0.02, 0.5, 0.10, 0.0, 99.0, 3.0, 0.75]}
 
-# 190 global base format 
-f = open('190BaseGlobal.gbl','r')
-Global190 = f.readlines()
-f.close()
-
-# 190 global base format 
-f = open('254BaseGlobal.gbl','r')
-Global254 = f.readlines()
-f.close()
+Path = __file__.split('/')
+Path = '/'.join(Path[:-1])
+Globals = {}
+for g in ['190','254']:    
+    # 190 global base format 
+    f = open(Path+'/'+g+'BaseGlobal.gbl','r')
+    Globals.update({g:f.readlines()}) 
+    f.close()
 
 
 # -
@@ -87,13 +86,15 @@ class ASYNCH_results:
 
 class ASYNCH_project:
     
-    def __init__(self, name = None, date1 = None, date2 = None, linkID = None, initial = 'Initial',
+    def __init__(self, path_in, path_out, name = None, date1 = None, date2 = None, linkID = None, initial = 'Initial',
         unix1 = None, unix2 = None, gblBase = '190BaseGlobal.gbl',
         initialBase = '190BaseInitial.dbc', parameters = None, links2save = 'PeakFlows.sav'):
         '''ASYNCH project constructor, this class creates the folders and files 
         for an ASYNCH run, and also eventually runs asynch from python (this is not
         a warp from C)
         Parameters:
+            - path_in: path to store: Global file, initial file and run file.
+            - path_out: path to store: hydrographs.
             - name: The name of the project with the path to save it
             - date1: the initial date of the simulation (YYYY-MM-DD HH:MM)
             - date2: the initial date of the simulation (YYYY-MM-DD HH:MM)
@@ -102,41 +103,22 @@ class ASYNCH_project:
             - output: name of the file with the outputs.
             - peakflow: name of the file containing the links where to save.
         '''
-        #Define initial values for the asynch project.
-        if os.path.isdir(name):
-            print('Warning: Project already exists, it will be loaded (not implemented)')
-        else:
-            #Define parameters of the new project
-            self.path = os.getcwd() + '/' + name
-            self.date1 = date1
-            self.date2 = date2
-            self.linkID = linkID
-            self.initial = initial
-            self.unix1 = unix1
-            self.unix2 = unix2
-            self.gblBase = gblBase
-            self.initialBase = initialBase
-            self.parameters = parameters
-            self.links2save = links2save
-            #Creates the new project on a file.
-            self.__ASYNC_createProject__()
-
-    def __ASYNC_createProject__(self):
-        '''Creates a new directory for asynch runs.
-        Parameters:
-            - pathProject: path to the new folder conaining the new asynch project
-        Return:
-            - Creates a new folder that contains sub-folders and files required 
-                for the asynch run'''
-        #Creates the main folder of the proyect and inputs and outputs.
-        aux.__make_folder__(self.path)
-        self.path_in = self.path + '/AsynchInputs'
-        aux.__make_folder__(self.path_in)
-        self.path_out = self.path + '/AsynchOutputs'
-        aux.__make_folder__(self.path_out)
-        self.path_scratch = self.path_out+'/Scratch'
-        aux.__make_folder__(self.path_scratch)
-    
+        #Define parameters of the new project
+        self.path_in = path_in
+        self.path_out = path_out
+        self.date1 = date1
+        self.date2 = date2
+        self.linkID = linkID
+        self.initial = initial
+        self.unix1 = unix1
+        self.unix2 = unix2
+        self.gblBase = gblBase
+        self.initialBase = initialBase
+        self.parameters = parameters
+        self.links2save = links2save
+        #Creates the new project on a file.
+        self.__ASYNC_createProject__()
+        
     def __ASYNCH_setRunFile__(self, OutRun = 'Run.sh',runBase = '190BaseRun.sh'):
         '''Writes the runfile to the AsynchInput directory of the project'''
         #Copy the run file from the base 
@@ -155,9 +137,9 @@ class ASYNCH_project:
                     replacement_text = str(DicToReplace[k]['to_put'])
                     print(line.replace(text_to_search, replacement_text), end='')
             
-    def ASYNCH_setProject(self, GlobalName='GlobalFile.gbl',Links2SaveName = 'Links2Save.sav',
+    def ASYNCH_setProject(self, GlobalName='GlobalFile.gbl',Links2SaveName = 'ControlPoints.sav',
         OutStatesName = 'OutputStates.dat', InitialName = 'InitialFile.dbc', setRunFile = True):
-        '''Edit the global file for 190 asynch run.
+        '''Edit the global file for asynch run.
         Parameters:
             - date1: the initial date of the simulation (YYYY-MM-DD HH:MM)
             - date2: the initial date of the simulation (YYYY-MM-DD HH:MM)
@@ -221,5 +203,21 @@ class ASYNCH_project:
         # SEt the runfile for the project.
         if setRunFile:
             self.__ASYNCH_setRunFile__()
+# # Deprecated
+
+
+def __ASYNC_createProject__(self):
+    '''Creates a new directory for asynch runs.
+    Parameters:
+        - pathProject: path to the new folder conaining the new asynch project
+    Return:
+        - Creates a new folder that contains sub-folders and files required 
+            for the asynch run'''
+    #Creates the main folder of the proyect and inputs and outputs.
+    aux.__make_folder__(self.path)
+    self.path_in = self.path + '/AsynchInputs'
+    aux.__make_folder__(self.path_in)
+    self.path_out = self.path + '/AsynchOutputs'
+    aux.__make_folder__(self.path_out)
 
 

@@ -2,7 +2,7 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: jupyter_scripts//ipynb,scripts//py
+#     formats: jupyter_scripts//ipynb,ifis_tools//py
 #     text_representation:
 #       extension: .py
 #       format_name: light

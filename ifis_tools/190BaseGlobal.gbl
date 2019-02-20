@@ -1,0 +1,90 @@
+%Model UID
+190
+
+%Begin and end date time
+¿date1?
+¿date2?
+
+%Parameters to filenames
+0
+
+%Components to print
+1
+State0
+
+%Peakflow function
+Classic
+
+%Global parameters
+%6 v_r  lambda_1  lambda_2  RC    v_h  v_g
+¿Parameters?
+
+%No. steps stored at each link and
+%Max no. steps transfered between procs
+%Discontinuity buffer size
+30 10 20
+
+%Topology (0 = .rvr, 1 = database)
+1 ¿linkID? /Dedicated/IFC/model_eval/topo51.dbc
+
+%DEM Parameters (0 = .prm, 1 = database)
+1 /Dedicated/IFC/model_eval/params51.dbc
+
+%Initial state (0 = .ini, 1 = .uini, 2 = .rec, 3 = .dbc, 3 = .h5)
+3 ¿initial?
+
+%Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
+2
+
+%Rain
+3 /Dedicated/IFC/model_eval/forcing_rain51_5435_s4.dbc
+10 60.0 ¿unix1? ¿unix2?
+
+%Evaporation
+7 /Dedicated/IFC/model_eval/evap.mon
+¿unix1? ¿unix2?
+
+
+%Dam (0 = no dam, 1 = .dam, 2 = .qvs)
+0
+
+%Reservoir ids (0 = no reservoirs, 1 = .rsv, 2 = .dbc file)
+0
+
+%Where to put write hydrographs
+%(0 = no output, 1 = .dat file, 2 = .csv file, 3 = database, 5 = .h5)
+1 15.0 ¿output?
+
+%Where to put peakflow data
+%(0 = no output, 1 = .pea file, 2 = database)
+0 
+
+%.sav files for hydrographs and peak file
+%(0 = save no data, 1 = .sav file, 2 = .dbc file, 3 = all links)
+1 ¿peakflow?
+3
+
+%Snapshot information (0 = none, 1 = .rec, 2 = database, 3 = .h5, 4 = recurrent .h5)
+0
+
+%Filename for scratch work
+/nfsscratch/Users/nicolas/
+
+%Numerical solver settings follow
+
+%facmin, facmax, fac
+.1 10.0 .9
+
+%Solver flag (0 = data below, 1 = .rkd)
+0
+
+%Numerical solver index (0-3 explicit, 4 implicit)
+2
+%Error tolerances (abs, rel, abs dense, rel dense)
+1e-2 1e-2 1e-2 1e-2
+1e-6 1e-6 1e-6 1e-6
+1e-2 1e-2 1e-2 1e-2
+1e-6 1e-6 1e-6 1e-6
+
+# %End of file
+-------------------------------

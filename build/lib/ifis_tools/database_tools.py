@@ -1,7 +1,7 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: jupyter_scripts//ipynb,scripts//py
+#     formats: jupyter_scripts//ipynb,ifis_tools//py
 #     text_representation:
 #       extension: .py
 #       format_name: light
@@ -22,7 +22,7 @@ from psycopg2 import sql
 import pandas as pd 
 from datetime import datetime
 import numpy as np 
-import auxiliar as aux
+from ifis_tools import auxiliar as aux
 
 
 # +
