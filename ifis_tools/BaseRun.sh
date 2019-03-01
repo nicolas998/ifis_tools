@@ -1,5 +1,5 @@
 #!/bin/sh
-#$ -N out_190b_2013_s4
+#$ -N ¿name2identify?
 #$ -j y
 #$ -cwd
 #$ -pe 56cpn 56
@@ -13,5 +13,5 @@
 module use /Dedicated/IFC/.argon/modules
 module load asynch
 
-mpirun -np 56 asynch ¿global?
+mpirun -np ¿nprocess? asynch ¿global?
 

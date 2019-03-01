@@ -410,7 +410,7 @@ def __Runoff_Del_Events__(Q, pos1, pos2, minTime = 2.5, minPeak = None, minConca
     #Eliminates events based on the peak flow
     if minPeak is not None:
         #Obtains peaks
-        Peaks = Series_Get_eventsPeaks(Q, pos1, pos2)
+        Peaks = __Runoff_Get_eventsPeaks__(Q, pos1, pos2)
         Peaks = np.array(Peaks)
         #Eliminates
         p = np.where(Peaks<minPeak)[0]
@@ -420,7 +420,7 @@ def __Runoff_Del_Events__(Q, pos1, pos2, minTime = 2.5, minPeak = None, minConca
     if minConcav is not None:
         #Obtains the concativity series 
         Concav = Q.resample('5h').mean().diff(2)
-        Concav = Series_Get_eventsPeaks(Concav, pos1, pos2)
+        Concav = __Runoff_Get_eventsPeaks__(Concav, pos1, pos2)
         #Eliminates
         p = np.where(np.array(Concav)<minConcav)[0]
         pos1 = pos1.delete(p)

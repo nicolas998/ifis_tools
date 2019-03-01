@@ -22,7 +22,7 @@ Classic
 %No. steps stored at each link and
 %Max no. steps transfered between procs
 %Discontinuity buffer size
-30 10 20
+30 10 30
 
 %Topology (0 = .rvr, 1 = database)
 1 ¿linkID? /Dedicated/IFC/model_eval/topo51.dbc
@@ -34,7 +34,7 @@ Classic
 3 ¿initial?
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
-2
+3
 
 %Rain
 3 /Dedicated/IFC/model_eval/forcing_rain51_5435_s4.dbc
@@ -44,6 +44,8 @@ Classic
 7 /Dedicated/IFC/model_eval/evap.mon
 ¿unix1? ¿unix2?
 
+%reservoir feed
+0
 
 %Dam (0 = no dam, 1 = .dam, 2 = .qvs)
 0

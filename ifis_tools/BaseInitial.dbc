@@ -2,8 +2,5 @@ dbname=restore_res_env_92 host=s-iihr51.iihr.uiowa.edu port=5435 user=iihr_stude
 
 1
 
-SELECT link_id, state_0, state_1, state_3 FROM initialconditions."model254_2013-04-01" WHERE link_id IN 
- (SELECT nodeX.link_id FROM public.env_master_km AS nodeX, public.env_master_km AS parentX 
-	WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = ¿linkID?)
-order by link_id;
+SELECT link_id, state_0, state_1, 0.02 as state_2, state_3, state_4, state_5, state_6 FROM initialconditions."model254_YYYY-04-01" order by link_id;
 

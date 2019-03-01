@@ -28,16 +28,19 @@ from ifis_tools import auxiliar as aux
 # # Global variables 
 
 # +
-# 190 original parameters
+#SEt of parameters for the different configurations of the model 
 Parameters = {'190': [6, 0.75, 0.33, -0.20, 0.50, 0.1, 2.2917e-5],
-    '254':[0.33, 0.2, -0.1, 0.02, 2.0425e-6, 0.02, 0.5, 0.10, 0.0, 99.0, 3.0, 0.75]}
+    '254':[12, 0.33, 0.2, -0.1, 0.02, 2.0425e-6, 0.02, 0.5, 0.10, 0.0, 99.0, 3.0, 0.75]}
 
+#Path of the file 
 Path = __file__.split('/')
-Path = '/'.join(Path[:-1])
+Path = '/'.join(Path[:-1])+'/'
+
+#Read the global files that are used to generate new globals
 Globals = {}
 for g in ['190','254']:    
     # 190 global base format 
-    f = open(Path+'/'+g+'BaseGlobal.gbl','r')
+    f = open(Path+g+'BaseGlobal.gbl','r')
     Globals.update({g:f.readlines()}) 
     f.close()
 
@@ -86,9 +89,9 @@ class ASYNCH_results:
 
 class ASYNCH_project:
     
-    def __init__(self, path_in, path_out, name = None, date1 = None, date2 = None, linkID = None, initial = 'Initial',
-        unix1 = None, unix2 = None, gblBase = '190BaseGlobal.gbl',
-        initialBase = '190BaseInitial.dbc', parameters = None, links2save = 'PeakFlows.sav'):
+    def __init__(self, path_in, path_out, name = None, date1 = None, date2 = None, 
+        linkID = 0, unix1 = None, unix2 = None, model = '190',
+        parameters = None, links2save = 'ControlPoints.sav'):
         '''ASYNCH project constructor, this class creates the folders and files 
         for an ASYNCH run, and also eventually runs asynch from python (this is not
         a warp from C)
@@ -103,32 +106,36 @@ class ASYNCH_project:
             - output: name of the file with the outputs.
             - peakflow: name of the file containing the links where to save.
         '''
-        #Define parameters of the new project
+        #Paths and name of the project
         self.path_in = path_in
         self.path_out = path_out
+        self.name = name
+        # Dates and linkID of the outlet 
         self.date1 = date1
         self.date2 = date2
         self.linkID = linkID
-        self.initial = initial
         self.unix1 = unix1
         self.unix2 = unix2
-        self.gblBase = gblBase
-        self.initialBase = initialBase
-        self.parameters = parameters
+        #Model to use, parameters and where to save
+        self.model = model
+        self.parameters = [str(i) for i in Parameters[model]]
         self.links2save = links2save
-        #Creates the new project on a file.
-        self.__ASYNC_createProject__()
         
-    def __ASYNCH_setRunFile__(self, OutRun = 'Run.sh',runBase = '190BaseRun.sh'):
+    def ASYNCH_setRunFile(self, runBase = 'BaseRun.sh', path2gbl = None, nprocess = 28):
         '''Writes the runfile to the AsynchInput directory of the project'''
         #Copy the run file from the base 
-        self.path_in_run = self.path_in + '/' + OutRun
-        comand = 'cp '+runBase+' '+self.path_in_run
+        self.path_in_run = self.path_in + '/' + self.name + '.sh'
+        comand = 'cp '+Path+runBase+' '+self.path_in_run
         os.system(comand)
         # Filename to write the new runfile
         filename = self.path_in_run
         #Dictionary with the words to search and change in the new runfile
-        DicToReplace = {'glbFile':{'to_search': '¿global?', 'to_put': self.path_in_global}}
+        if path2gbl is None:
+            DicToReplace = {'glbFile':{'to_search': '¿global?', 'to_put': self.name+'.gbl'}}
+        else:
+            DicToReplace = {'glbFile':{'to_search': '¿global?', 'to_put': path2gbl + self.name+'.gbl'}}
+        DicToReplace.update({'nProcess':{'to_search': '¿nprocess?', 'to_put': str(nprocess)}})
+        DicToReplace.update({'name2identify':{'to_search': '¿name2identify?', 'to_put': 'r'+self.name}})
         #Changing the runfile.    
         for k in DicToReplace:            
             with fileinput.FileInput(filename, inplace=True) as file:
@@ -137,8 +144,8 @@ class ASYNCH_project:
                     replacement_text = str(DicToReplace[k]['to_put'])
                     print(line.replace(text_to_search, replacement_text), end='')
             
-    def ASYNCH_setProject(self, GlobalName='GlobalFile.gbl',Links2SaveName = 'ControlPoints.sav',
-        OutStatesName = 'OutputStates.dat', InitialName = 'InitialFile.dbc', setRunFile = True):
+    def ASYNCH_setGlobal(self, gblBase = 'BaseGlobal.gbl', Links2SaveName = 'ControlPoints.sav',
+        OutStatesName = 'OutputStates.dat', createInitial = True, oldInitial = None):
         '''Edit the global file for asynch run.
         Parameters:
             - date1: the initial date of the simulation (YYYY-MM-DD HH:MM)
@@ -155,32 +162,31 @@ class ASYNCH_project:
         Outputs:
             This function writes a gbl file where gblOut indicates.'''
         # Copy the base global to a glbOut
-        self.path_in_global = self.path_in + '/'+ GlobalName
-        comand = 'cp '+self.gblBase+' '+self.path_in_global
+        self.path_in_global = self.path_in +  self.name + '.gbl'
+        comand = 'cp '+Path+self.model+gblBase+' '+self.path_in_global
         os.system(comand)
         #Copy the links2save file 
-        self.path_in_links2save = self.path_in + '/'+ Links2SaveName
-        comand = 'cp '+self.links2save+' '+self.path_in_links2save
+        self.path_in_links2save = self.path_in + Links2SaveName
+        comand = 'cp '+Path+self.links2save+' '+self.path_in_links2save
         os.system(comand)
         #Set of the initial file for that link 
-        self.path_in_initial = self.path_in+ '/'+ InitialName
-        aux.__ASYNCH_initialFile__(self.path_in_initial,
-            self.linkID, self.initialBase)
+        if createInitial:
+            self.path_in_initial = self.path_in + self.name + '.dbc'
+            self.__ASYNCH_setInitialFile__(self.path_in_initial,self.date1[:4],
+                self.linkID)
+        else:
+            self.path_in_initial = oldInitial
         #Set the name of the file with the output of the streamflow
-        self.path_out_states = self.path_out+'/'+ OutStatesName
+        self.path_out_states = self.path_out + OutStatesName
         # Unix time are equal to date
         if self.unix1 is None:
-            self.unix1 = aux.__datetime2unix__(self.date1)
+            self.unix1 = aux.__datetime2unix__(self.date1) + 12*3600.
         textUnix1 = '%d' % self.unix1
         if self.unix2 is None:
-            self.unix2 =aux.__datetime2unix__(self.date2)
+            self.unix2 =aux.__datetime2unix__(self.date2) + 12*3600
         textUnix2 = '%d' % self.unix2
         # Parameters 
-        if self.parameters is None:
-            self.Param = [str(i) for i in Param190]
-        else:
-            self.Param = [str(i) for i in self.parameters]
-        Param = ' '.join(self.Param)+'\n'
+        Param = ' '.join(self.parameters)+'\n'
         # Replace parameters in the global file        
         DicToreplace = {'date1':{'to_search': '¿date1?', 'to_put': self.date1},
             'date2':{'to_search': '¿date2?', 'to_put': self.date2},
@@ -190,8 +196,7 @@ class ASYNCH_project:
             'parameters':{'to_search': '¿Parameters?', 'to_put': Param},
             'output':{'to_search': '¿output?', 'to_put': self.path_out_states},
             'peakflow':{'to_search': '¿peakflow?', 'to_put': self.path_in_links2save},
-            'initial':{'to_search': '¿initial?', 'to_put': self.path_in_initial},
-            'scratch':{'to_search': '¿scratch?', 'to_put': self.path_scratch}}
+            'initial':{'to_search': '¿initial?', 'to_put': self.path_in_initial}}
         # Replacement in the document.
         filename = self.path_in_global
         for k in DicToreplace:            
@@ -200,9 +205,32 @@ class ASYNCH_project:
                     text_to_search = DicToreplace[k]['to_search']
                     replacement_text = str(DicToreplace[k]['to_put'])
                     print(line.replace(text_to_search, replacement_text), end='')
-        # SEt the runfile for the project.
-        if setRunFile:
-            self.__ASYNCH_setRunFile__()
+        
+    def __ASYNCH_setInitialFile__(self, InitialOut, year, linkID):
+        '''Set the dbc query for the initial conditions for asynch
+        Parameters:
+            - InitialOut: The path and name of the outlet initial file for the dbc.
+            - linkID: the link in which is going to be placed the initial file.
+            - InicialBase: Path to the basefile for the stablishment of the initial file.
+        Results:
+            - Writes the initial file at InitialOut.'''
+        # Copy the initial file state in
+        if linkID == 0:
+            comando = 'cp '+Path+'BaseInitial.dbc'+' '+InitialOut
+        else:
+            comando = 'cp '+Path+'BaseInitial_link.dbc'+' '+InitialOut
+        os.system(comando)
+        #Dict with words to replace
+        DicToreplace = {'link':{'to_search': '¿linkID?', 'to_put': linkID},
+            'date':{'to_search': 'YYYY', 'to_put': year}}
+        # Replace the linkID in the initial file so asynch knows.
+        filename = InitialOut
+        for k in DicToreplace:          
+            with fileinput.FileInput(filename, inplace = True) as file:
+                for line in file:
+                    text_to_search = DicToreplace[k]['to_search']
+                    replacement_text = str(DicToreplace[k]['to_put'])
+                    print(line.replace(text_to_search, replacement_text), end='')
 # # Deprecated
 
 

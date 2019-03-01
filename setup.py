@@ -10,7 +10,7 @@ setup(
     author='Nicolas Velasquez G',
     author_email='nicolas.velasquezgiron@gmail.com',    
     packages=['ifis_tools'],
-    package_data={'ifis_tools':['254BaseGlobal.gbl','190BaseGlobal.gbl','BaseInitial.dbc','BaseRun.sh','ControlPoints.sav']},
+    package_data={'ifis_tools':['254BaseGlobal.gbl','190BaseGlobal.gbl','BaseInitial.dbc','BaseRun.sh','ControlPoints.sav','BaseInitial_link.dbc']},
     url='https://github.com/nicolas998/ifis_tools.git',
     license='LICENSE.txt',
     description='Watershed Modelling Framework',
