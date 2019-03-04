@@ -2,7 +2,7 @@
 import os
 from numpy.distutils.core import setup, Extension
 
-os.system('jupytext --set-formats jupyter_scripts//ipynb,ifis_tools//py --sync jupyter_scripts/*.ipynb')
+#os.system('jupytext --set-formats jupyter_scripts//ipynb,ifis_tools//py --sync jupyter_scripts/*.ipynb')
 
 setup(
     name='ifis_tools',
