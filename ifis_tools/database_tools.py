@@ -111,6 +111,16 @@ def SQL_Get_linkArea(linkID):
     con.close()
     return A[0][0]*2.583
 
+def SQL_Get_Coordinates(linkID):
+    con = db.DataBaseConnect(user='nicolas',password='10A28Gir0')
+    cur = con.cursor()
+    LatLng = {}
+    query = sql.SQL('SELECT lat, lng FROM pers_felipe.pois_adv_geom where link_id = '+str(linkID))
+    cur.execute(query)
+    Coord = cur.fetchall()
+    con.close()
+    return float(Coord[0][0]),float(Coord[0][1])       
+    
 def SQL_Read_MeanRainfall(link_id, date1, date2, schema = 'pers_nico', 
     table = 's4mrain', time_name = 'unix_time', data_name = 'rain', linkid_name = 'link_id'):
     '''Read streamflow data from IIHR database "research_environment" 
