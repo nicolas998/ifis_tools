@@ -145,7 +145,8 @@ class ASYNCH_project:
                     print(line.replace(text_to_search, replacement_text), end='')
             
     def ASYNCH_setGlobal(self, gblBase = 'BaseGlobal.gbl', Links2SaveName = 'ControlPoints.sav',
-        OutStatesName = 'OutputStates.dat', createInitial = True, oldInitial = None):
+        OutStatesName = 'OutputStates.dat', createInitial = True, oldInitial = None,
+        snapName = None, snapTime = None):
         '''Edit the global file for asynch run.
         Parameters:
             - date1: the initial date of the simulation (YYYY-MM-DD HH:MM)
@@ -176,6 +177,23 @@ class ASYNCH_project:
                 self.linkID)
         else:
             self.path_in_initial = oldInitial
+        #Set the number of the initial depending on its extension 
+        InitNumber = str(self.__ASYNCH_get_number(self.path_in_initial, whatfor='initial'))
+        
+        #Set the snapshot info
+        if snapName is not None:
+            Snap_flag = self.__ASYNCH_get_number(snapName, whatfor='snapshot')
+            Snap_name = snapName
+            if snapTime is not None:
+                Snap_time = str(snapTime)
+                if Snap_flag == 3:
+                    Snap_flag = str(4)
+            else:
+                Snap_time = ''
+            Snap_flag = str(Snap_flag)
+        else:
+            Snap_flag = 0; Snap_name = ''; Snap_time = ''
+        
         #Set the name of the file with the output of the streamflow
         self.path_out_states = self.path_out + OutStatesName
         # Unix time are equal to date
@@ -196,7 +214,11 @@ class ASYNCH_project:
             'parameters':{'to_search': '¿Parameters?', 'to_put': Param},
             'output':{'to_search': '¿output?', 'to_put': self.path_out_states},
             'peakflow':{'to_search': '¿peakflow?', 'to_put': self.path_in_links2save},
-            'initial':{'to_search': '¿initial?', 'to_put': self.path_in_initial}}
+            'initial':{'to_search': '¿initial?', 'to_put': self.path_in_initial},
+            'initial_flag': {'to_search': '¿initialflag?', 'to_put': InitNumber},
+            'snapshot_flag': {'to_search': '¿snapflag?', 'to_put': Snap_flag},
+            'snapshot_time': {'to_search': '¿snaptime?', 'to_put': Snap_time},
+            'snapthot_name': {'to_search': '¿snapshot?', 'to_put': Snap_name},}
         # Replacement in the document.
         filename = self.path_in_global
         for k in DicToreplace:            
@@ -231,6 +253,35 @@ class ASYNCH_project:
                     text_to_search = DicToreplace[k]['to_search']
                     replacement_text = str(DicToreplace[k]['to_put'])
                     print(line.replace(text_to_search, replacement_text), end='')
+               
+    def __ASYNCH_get_number(self, path, whatfor='initial'):
+        '''Get the number to set into the globabl based on the extension name 
+        of the file'''
+        #Get the extention from the file 
+        extension = os.path.splitext(path)[1]
+        #Find the number for the case of init states
+        if whatfor == 'initial':            
+            if extension == '.ini':
+                return 0
+            elif extension == '.uini':
+                return 1
+            elif extension == '.rec':
+                return 2
+            elif extension == '.dbc':
+                return 3
+            elif extension == '.h5':
+                return 4
+        # Fing the number for the case of snapshot
+        if whatfor == 'snapshot':
+            if extension == '':
+                return 0
+            elif extension == '.rec':
+                return 1
+            elif extension == '.dbc':
+                return 2
+            elif extension == '.h5':
+                return 3
+        
 # # Deprecated
 
 

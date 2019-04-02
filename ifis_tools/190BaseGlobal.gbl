@@ -30,8 +30,8 @@ Classic
 %DEM Parameters (0 = .prm, 1 = database)
 1 /Dedicated/IFC/model_eval/params51.dbc
 
-%Initial state (0 = .ini, 1 = .uini, 2 = .rec, 3 = .dbc, 3 = .h5)
-3 ¿initial?
+%Initial state (0 = .ini, 1 = .uini, 2 = .rec, 3 = .dbc, 4 = .h5)
+¿initialflag? ¿initial?
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
 2
@@ -65,7 +65,7 @@ Classic
 3
 
 %Snapshot information (0 = none, 1 = .rec, 2 = database, 3 = .h5, 4 = recurrent .h5)
-0
+¿snapflag? ¿snaptime? ¿snapshot?
 
 %Filename for scratch work
 /nfsscratch/Users/nicolas/

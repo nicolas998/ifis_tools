@@ -197,8 +197,7 @@ def Runoff_SeparateBaseflow(Qobs, Qsim):
         - Qsep: Observed separated records at hourly scale'''
     #Observed series to hourly scale.
     Qh = Qobs.resample('1h').mean()
-    Qh[np.isnan(Qh)] = Qh.mean()
-    Qh[Qh<0] = Qh.mean()
+    Qh.interpolate(method='linear',inplace=True)
     Qsep = DigitalFilters(Qh, tipo = 'Nathan', a = 0.998)
     #Pre-process of simulated series to hourly scale.
     Qsh = Qsim.resample('1h').mean()
@@ -206,7 +205,7 @@ def Runoff_SeparateBaseflow(Qobs, Qsim):
     #Return results
     return Qh, Qsh, Qsep
 
-def Runoff_FindEvents(Qobs, Qsim, minTime = 1, minConcav = None, minPeak = None):
+def Runoff_FindEvents(Qobs, Qsim, umbral = None,minTime = 1, minConcav = None, minPeak = None):
     '''Separates runoff from baseflow and finds the events.
     Parameters:
         - Qobs: Hourly obseved streamflow.
@@ -218,7 +217,9 @@ def Runoff_FindEvents(Qobs, Qsim, minTime = 1, minConcav = None, minPeak = None)
         - pos1: pandas index lists with the initial positions.
         - pos2: pandas index lists with the end positions.'''
     #Obtain the positions of the start and 
-    pos1, pos2 = __Runoff_Get_Events__(Qsim, np.percentile(Qobs, 20))
+    if umbral is None:
+        umbral = np.percentile(Qobs[np.isfinite(Qobs)], 20)
+    pos1, pos2 = __Runoff_Get_Events__(Qsim, umbral)
     pos1, pos2 = __Runoff_Del_Events__(Qobs, pos1, pos2, minTime=1, minConcav=minConcav, minPeak = minPeak)
     #Returns results 
     return pos1, pos2

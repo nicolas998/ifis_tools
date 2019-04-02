@@ -112,7 +112,7 @@ def SQL_Get_linkArea(linkID):
     return A[0][0]*2.583
 
 def SQL_Get_Coordinates(linkID):
-    con = db.DataBaseConnect(user='nicolas',password='10A28Gir0')
+    con = DataBaseConnect(user='nicolas',password='10A28Gir0')
     cur = con.cursor()
     LatLng = {}
     query = sql.SQL('SELECT lat, lng FROM pers_felipe.pois_adv_geom where link_id = '+str(linkID))
