@@ -154,7 +154,7 @@ class ASYNCH_project:
             
     def ASYNCH_setGlobal(self, gblBase = 'BaseGlobal.gbl', Links2SaveName = 'ControlPoints.sav',
         OutStatesName = 'OutputStates.dat', createInitial = True, oldInitial = None,
-        snapName = None, snapTime = None, createSav = False):
+        snapName = None, snapTime = None, createSav = False, initial_name = None):
         '''Edit the global file for asynch run.
         Parameters:
             - date1: the initial date of the simulation (YYYY-MM-DD HH:MM)
@@ -186,7 +186,10 @@ class ASYNCH_project:
             f.close()
         #Set of the initial file for that link 
         if createInitial:
-            self.path_in_initial = self.path_in + self.name + '.dbc'
+            if initial_name is None:            
+                self.path_in_initial = self.path_in + self.name + '.dbc'
+            else:
+                self.path_in_initial = initial_name
             self.__ASYNCH_setInitialFile__(self.path_in_initial,self.date1[:4],
                 self.linkID)
         else:
