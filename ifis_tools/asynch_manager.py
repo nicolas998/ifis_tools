@@ -51,6 +51,14 @@ for g in ['190','254']:
 #
 # ## Asynch results reader 
 
+def UpdateGlobal(filename, DictUpdates):
+    #Iterate in the updates keys
+    for k in DictUpdates:            
+        with fileinput.FileInput(filename, inplace=True) as file:
+            for line in file:                    
+                print(line.replace(DictUpdates[k]['old'], DictUpdates[k]['new']), end='')
+        
+
 class ASYNCH_results:
     
     def __init__(self,path):
@@ -218,7 +226,7 @@ class ASYNCH_project:
             'unix2':{'to_search': '¿unix2?', 'to_put': textUnix2},
             'linkID':{'to_search': '¿linkID?', 'to_put': self.linkID},
             'parameters':{'to_search': '¿Parameters?', 'to_put': Param},
-            'output':{'to_search': '¿output?', 'to_put': self.path_out_states},
+            'output':{'to_search': '¿output?', 'to_put': self.:_states},
             'peakflow':{'to_search': '¿peakflow?', 'to_put': self.path_in_links2save},
             'initial':{'to_search': '¿initial?', 'to_put': self.path_in_initial},
             'initial_flag': {'to_search': '¿initialflag?', 'to_put': InitNumber},
