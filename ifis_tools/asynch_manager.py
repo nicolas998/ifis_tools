@@ -226,7 +226,7 @@ class ASYNCH_project:
             'unix2':{'to_search': '¿unix2?', 'to_put': textUnix2},
             'linkID':{'to_search': '¿linkID?', 'to_put': self.linkID},
             'parameters':{'to_search': '¿Parameters?', 'to_put': Param},
-            'output':{'to_search': '¿output?', 'to_put': self.:_states},
+            'output':{'to_search': '¿output?', 'to_put': self.path_out_states},
             'peakflow':{'to_search': '¿peakflow?', 'to_put': self.path_in_links2save},
             'initial':{'to_search': '¿initial?', 'to_put': self.path_in_initial},
             'initial_flag': {'to_search': '¿initialflag?', 'to_put': InitNumber},
