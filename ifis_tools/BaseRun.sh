@@ -3,7 +3,7 @@
 #$ -j y
 #$ -cwd
 #$ -pe 56cpn 56
-####$ -l mf=16G
+####$ -l mf=15G
 #$ -q IFC
 
 /bin/echo Running on host: `hostname`.

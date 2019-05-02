@@ -21,6 +21,7 @@ import psycopg2
 from psycopg2 import sql
 import pandas as pd 
 from datetime import datetime
+from climata.usgs import InstantValueIO, DailyValueIO
 import numpy as np 
 from ifis_tools import auxiliar as aux
 
@@ -65,6 +66,27 @@ def SQL_read_USGS_Streamflow(usgs_id, date1, date2, schema = 'pers_nico',
     Data = pd.read_sql(query, con, index_col='unix_time',parse_dates={'unix_time':{'unit':'s'}})
     con.close()
     return Data
+
+def WEB_Get_USGS(usgs_code, date1, date2):
+    '''Get USGS data from the web using the climdata interface
+    Parameters (debe ser probado):
+        - usgs_code: the code of the station to obtain.
+        - date1: initial date.
+        - date2: final date.'''
+    #Modify dates
+    date1 = str(aux.__datetime2unix__(date1))
+    date2 = str(aux.__datetime2unix__(date2))
+    #Get the data form the web 
+    data = InstantValueIO(
+        start_date = pd.Timestamp('2015-01-01'),
+        end_date = pd.Timestamp('2015-12-31'),
+        station = "05421000",
+        parameter = "00060")
+    #Convert the data into a pandas series 
+    for series in data:
+        flow = [r[1] for r in series.data]
+        dates = [r[0] for r in series.data]
+    return pd.Series(flow, dates)
 
 #SQL Query to obtain the data from per_felipe.pois_adv_geom
 def SQL_USGS_at_IFIS():
