@@ -73,20 +73,17 @@ def WEB_Get_USGS(usgs_code, date1, date2):
         - usgs_code: the code of the station to obtain.
         - date1: initial date.
         - date2: final date.'''
-    #Modify dates
-    date1 = str(aux.__datetime2unix__(date1))
-    date2 = str(aux.__datetime2unix__(date2))
     #Get the data form the web 
     data = InstantValueIO(
-        start_date = pd.Timestamp('2015-01-01'),
-        end_date = pd.Timestamp('2015-12-31'),
-        station = "05421000",
+        start_date = pd.Timestamp(date1),
+        end_date = pd.Timestamp(date2),
+        station = usgs_code,
         parameter = "00060")
     #Convert the data into a pandas series 
     for series in data:
         flow = [r[1] for r in series.data]
         dates = [r[0] for r in series.data]
-    return pd.Series(flow, dates)
+    return pd.Series(flow, pd.to_datetime(dates, utc=True)) * 0.02832
 
 #SQL Query to obtain the data from per_felipe.pois_adv_geom
 def SQL_USGS_at_IFIS():
