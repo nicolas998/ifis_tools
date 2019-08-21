@@ -1,23 +1,24 @@
 %Model UID
-254
+$model_uid
 
 %Begin and end date time
-¿date1?
-¿date2?
+$date1 
+$date2 
 
-%Parameters to filenames
-0
+0	%Parameters to filenames
 
 %Components to print
-1
+4
 State0
+State1
+State2
+State3
 
 %Peakflow function
 Classic
 
-%Global parameters
-%12 v_0 lambda_1 lambda_2 v_h  k_3       k_I_factor h_b S_L  A   B    exponent vb
-¿Parameters?
+%Global pars: no globals
+1            1
 
 %No. steps stored at each link and
 %Max no. steps transfered between procs
@@ -25,27 +26,24 @@ Classic
 30 10 30
 
 %Topology (0 = .rvr, 1 = database)
-1 ¿linkID? /Dedicated/IFC/model_eval/topo51.dbc
+0 $rvrFile
 
-%DEM Parameters (0 = .prm, 1 = database)
-1 /Dedicated/IFC/model_eval/params51.dbc
+%DEM Parameters (0 = .prm, 1 = database) Aup,Li,Ah,So,Vr,ar,Vs,as,k1,k2,t_l,b_l,Lam1,Lam2,Vo
+0 $prmFile
 
-%Initial state (0 = .ini, 1 = .uini, 2 = .rec, 3 = .dbc, 3 = .h5)
-3 ¿initial?
+%Initial state (0 = .ini, 1 = .uini, 2 = .rec, 3 = .dbc)
+1 $initialFile
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
-3
+2
 
 %Rain
-3 /Dedicated/IFC/model_eval/forcing_rain51_5435_s4.dbc
-10 60.0 ¿unix1? ¿unix2?
+$rainType $rainPath
+10 60 $unix1 $unix2 
 
 %Evaporation
-7 /Dedicated/IFC/model_eval/evap.mon
-¿unix1? ¿unix2?
-
-%reservoir feed
-0
+7 $evpFile
+$unix1 $unix2 
 
 %Dam (0 = no dam, 1 = .dam, 2 = .qvs)
 0
@@ -54,19 +52,19 @@ Classic
 0
 
 %Where to put write hydrographs
-%(0 = no output, 1 = .dat file, 2 = .csv file, 3 = database, 5 = .h5)
-1 15.0 ¿output?
+%(0 = no output, 1 = .dat file, 2 = .csv file, 3 = database, 5 = .h5 packet, 6 = .h5 array)
+1 60 $datResults
 
 %Where to put peakflow data
 %(0 = no output, 1 = .pea file, 2 = database)
-0 
+0
 
 %.sav files for hydrographs and peak file
 %(0 = save no data, 1 = .sav file, 2 = .dbc file, 3 = all links)
-1 ¿peakflow?
-3
+1 $controlFile %Hydrographs
+3 %Peakflows
 
-%Snapshot information (0 = none, 1 = .rec, 2 = database, 3 = .h5, 4 = recurrent .h5)
+%Snapshot information (0 = none, 1 = to .rec file, 2 = to database, 3 = to .h5 file, 4 = to recurrent .h5 file)
 0
 
 %Filename for scratch work
@@ -79,14 +77,16 @@ Classic
 
 %Solver flag (0 = data below, 1 = .rkd)
 0
-
 %Numerical solver index (0-3 explicit, 4 implicit)
 2
 %Error tolerances (abs, rel, abs dense, rel dense)
-1e-2 1e-2 1e-2 1e-2 1e-2 1e-2 1e-2 1e-2
-1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6
-1e-2 1e-2 1e-2 1e-2 1e-2 1e-2 1e-2 1e-2
-1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6
+1e-4 1e-4 1e-4 1e-4 1e-4 1e-4 1e-4
+1e-6 1e-6 1e-6 1e-6 1e-4 1e-4 1e-4
+1e-4 1e-4 1e-4 1e-4 1e-4 1e-4 1e-4
+1e-6 1e-6 1e-6 1e-6 1e-4 1e-4 1e-4
+
 
 # %End of file
 -------------------------------
+
+

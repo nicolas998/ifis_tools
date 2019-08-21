@@ -197,8 +197,7 @@ def Runoff_SeparateBaseflow(Qobs, Qsim):
         - Qsep: Observed separated records at hourly scale'''
     #Observed series to hourly scale.
     Qh = Qobs.resample('1h').mean()
-    Qh[np.isnan(Qh)] = Qh.mean()
-    Qh[Qh<0] = Qh.mean()
+    Qh.interpolate(method='linear',inplace=True)
     Qsep = DigitalFilters(Qh, tipo = 'Nathan', a = 0.998)
     #Pre-process of simulated series to hourly scale.
     Qsh = Qsim.resample('1h').mean()
@@ -206,7 +205,7 @@ def Runoff_SeparateBaseflow(Qobs, Qsim):
     #Return results
     return Qh, Qsh, Qsep
 
-def Runoff_FindEvents(Qobs, Qsim, minTime = 1, minConcav = None, minPeak = None):
+def Runoff_FindEvents(Qobs, Qsim, umbral = None,minTime = 1, minConcav = None, minPeak = None):
     '''Separates runoff from baseflow and finds the events.
     Parameters:
         - Qobs: Hourly obseved streamflow.
@@ -218,7 +217,9 @@ def Runoff_FindEvents(Qobs, Qsim, minTime = 1, minConcav = None, minPeak = None)
         - pos1: pandas index lists with the initial positions.
         - pos2: pandas index lists with the end positions.'''
     #Obtain the positions of the start and 
-    pos1, pos2 = __Runoff_Get_Events__(Qsim, np.percentile(Qobs, 20))
+    if umbral is None:
+        umbral = np.percentile(Qobs[np.isfinite(Qobs)], 20)
+    pos1, pos2 = __Runoff_Get_Events__(Qsim, umbral)
     pos1, pos2 = __Runoff_Del_Events__(Qobs, pos1, pos2, minTime=1, minConcav=minConcav, minPeak = minPeak)
     #Returns results 
     return pos1, pos2
@@ -410,7 +411,7 @@ def __Runoff_Del_Events__(Q, pos1, pos2, minTime = 2.5, minPeak = None, minConca
     #Eliminates events based on the peak flow
     if minPeak is not None:
         #Obtains peaks
-        Peaks = Series_Get_eventsPeaks(Q, pos1, pos2)
+        Peaks = __Runoff_Get_eventsPeaks__(Q, pos1, pos2)
         Peaks = np.array(Peaks)
         #Eliminates
         p = np.where(Peaks<minPeak)[0]
@@ -420,7 +421,7 @@ def __Runoff_Del_Events__(Q, pos1, pos2, minTime = 2.5, minPeak = None, minConca
     if minConcav is not None:
         #Obtains the concativity series 
         Concav = Q.resample('5h').mean().diff(2)
-        Concav = Series_Get_eventsPeaks(Concav, pos1, pos2)
+        Concav = __Runoff_Get_eventsPeaks__(Concav, pos1, pos2)
         #Eliminates
         p = np.where(np.array(Concav)<minConcav)[0]
         pos1 = pos1.delete(p)

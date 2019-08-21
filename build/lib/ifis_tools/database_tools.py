@@ -21,9 +21,9 @@ import psycopg2
 from psycopg2 import sql
 import pandas as pd 
 from datetime import datetime
+from climata.usgs import InstantValueIO, DailyValueIO
 import numpy as np 
 from ifis_tools import auxiliar as aux
-
 
 # +
 def DataBaseConnect(user = "iihr_student", password = "iihr.student", host = "s-iihr51.iihr.uiowa.edu",
@@ -35,6 +35,16 @@ def DataBaseConnect(user = "iihr_student", password = "iihr.student", host = "s-
         port = port,
         database = database)
     return con
+
+def SQL_getSubLinks(linkid):
+    '''returns the list of links that belong to a certain link.'''
+    con = DataBaseConnect(user='nicolas',password='10A28Gir0',database='rt_precipitation')
+    query = 'SELECT nodeX.link_id AS link_id FROM students.env_master_km AS nodeX, students.env_master_km AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = '+str(linkid)
+    Data = pd.read_sql(query, con)
+    Data = Data.values.T[0]
+    Data.sort()
+    con.close()
+    return Data
 
 def SQL_read_USGS_Streamflow(usgs_id, date1, date2, schema = 'pers_nico', 
     table = 'data_usgs', time_name = 'unix_time', data_name = 'val', usgs_name = 'usgs_id'):
@@ -65,6 +75,38 @@ def SQL_read_USGS_Streamflow(usgs_id, date1, date2, schema = 'pers_nico',
     Data = pd.read_sql(query, con, index_col='unix_time',parse_dates={'unix_time':{'unit':'s'}})
     con.close()
     return Data
+
+def WEB_Get_USGS(usgs_code, date1, date2):
+    '''Get USGS data from the web using the climdata interface
+    Parameters (debe ser probado):
+        - usgs_code: the code of the station to obtain.
+        - date1: initial date.
+        - date2: final date.'''
+    #Get the data form the web 
+    data = InstantValueIO(
+        start_date = pd.Timestamp(date1),
+        end_date = pd.Timestamp(date2),
+        station = usgs_code,
+        parameter = "00060")
+    try:
+        #Convert the data into a pandas series 
+        for series in data:
+            flow = [r[0] for r in series.data]
+            dates = [r[1] for r in series.data]
+        #Obtain the series of pandas
+        Q = pd.Series(flow, pd.to_datetime(dates, utc=True)) * 0.02832
+        Index = [d.replace(tzinfo = None) for d in Q.index]
+        Q.index = Index
+    except:
+        #Convert the data into a pandas series 
+        for series in data:
+            flow = [r[1] for r in series.data]
+            dates = [r[0] for r in series.data]
+        #Obtain the series of pandas
+        Q = pd.Series(flow, pd.to_datetime(dates, utc=True)) * 0.02832
+        Index = [d.replace(tzinfo = None) for d in Q.index]
+        Q.index = Index
+    return Q
 
 #SQL Query to obtain the data from per_felipe.pois_adv_geom
 def SQL_USGS_at_IFIS():
@@ -99,21 +141,34 @@ def SQL_USGS_at_MATC():
     con.close()
     return [l[0] for l in L]
 
-def SQL_Get_linkArea(linkID):
+def SQL_Get_linkArea(linkID, upArea = True):
     '''Obtains the up area for a link ID'''
     #The query and the obtentions
-    con = DataBaseConnect('nicolas','10A28Gir0')
+    con = DataBaseConnect('nicolas','10A28Gir0',database='restore_res_env_92')
     cur = con.cursor()
-    q = sql.SQL("SELECT upstream_area FROM pers_felipe.pois_adv_geom WHERE link_id = "+str(linkID))
+    if upArea:
+        q = sql.SQL("SELECT up_area FROM public.env_master_km where link_id="+str(linkID))
+    else:
+        q = sql.SQL("SELECT area FROM public.env_master_km where link_id="+str(linkID))
     cur.execute(q)
     A = cur.fetchall()
     cur.close()
     con.close()
-    return A[0][0]*2.583
+    return A[0][0]
 
+def SQL_Get_Coordinates(linkID):
+    con = DataBaseConnect(user='nicolas',password='10A28Gir0')
+    cur = con.cursor()
+    LatLng = {}
+    query = sql.SQL('SELECT lat, lng FROM pers_felipe.pois_adv_geom where link_id = '+str(linkID))
+    cur.execute(query)
+    Coord = cur.fetchall()
+    con.close()
+    return float(Coord[0][0]),float(Coord[0][1])       
+    
 def SQL_Read_MeanRainfall(link_id, date1, date2, schema = 'pers_nico', 
     table = 's4mrain', time_name = 'unix_time', data_name = 'rain', linkid_name = 'link_id'):
-    '''Read streamflow data from IIHR database "research_environment" 
+    '''DEPRECATED Read streamflow data from IIHR database "research_environment" 
     and returns it as a pandas.DataFrame element.
     Parameters:
         - usgs_id: code of the usgs.
@@ -175,4 +230,23 @@ def SQL_Get_MeanRainfall(linkID, date1, date2):
 
 # -
 
-
+def SQL_Get_WatershedFromMaster(linkID, otherParams = None):
+    '''Obtains the params files records for a watershed based on its linkID.
+    The otherParams is a list with the names stand for other parameters that can also be obtained from the querty
+    Other names are: [k_i,k_dry, h_b, topsoil_thickness, k_d, slope]'''
+    #Obtains the connection 
+    con = DataBaseConnect(user='nicolas', password='10A28Gir0', database='rt_precipitation')
+    #Set up the data that will ask for 
+    text1 = "WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM students.env_master_km AS nodeX, students.env_master_km AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(linkID)+") SELECT link_id, up_area, area, length" 
+    text2 = "FROM students.env_master_km WHERE link_id IN (SELECT * FROM subbasin)"
+    if otherParams is None:
+        q = sql.SQL(text1+' '+text2) 
+    else:
+        for l in otherParams:
+            text1+= ',' + l +' '
+        q = sql.SQL(text1+text2) 
+    #Get the data
+    BasinData = pd.read_sql(q, con, index_col='link_id')
+    con.close()
+    return BasinData.rename(columns={'up_area': "Acum", 'area':'Area', 'length':'Long'})
+    
