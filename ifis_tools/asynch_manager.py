@@ -18,14 +18,17 @@
 #
 # SEt of tools to get data from asynch and set the variables to run the model in an easy way from python.
 
-import pandas as pd 
+import pandas as pd
 from datetime import timezone, datetime
-import os 
+import os
 import fileinput
-import numpy as np 
+import numpy as np
 from ifis_tools import auxiliar as aux
-from ifis_tools import database_tools as db 
-from wmf import wmf
+from ifis_tools import database_tools as db
+try:
+    from wmf import wmf
+except:
+    print('Unable to import WMF, cant create basins whit it')
 from string import Template
 from struct import pack, unpack
 import io
@@ -34,8 +37,8 @@ import io
 def __saveBin__(lid, lid_vals, count, fn):
     io_buffer_size = 4+4*100000
     if count > 0:
-        lid = (lid[lid_vals > 0])
-        lid_vals = (lid_vals[lid_vals > 0])
+        lid = (lid[lid_vals > 0.005])
+        lid_vals = (lid_vals[lid_vals > 0.005])
     fh = io.open(fn, 'wb', io_buffer_size)
     fh.write(pack('<I', count))
     for vals in zip(lid, lid_vals):
@@ -54,10 +57,10 @@ Path = '/'.join(Path[:-1])+'/'
 
 #Read the global files that are used to generate new globals
 Globals = {}
-for g in ['190','254','60X']:    
+for g in ['190','254','60X']:
     # 190 global base format 
     f = open(Path+g+'BaseGlobal.gbl','r')
-    Globals.update({g:f.readlines()}) 
+    Globals.update({g:f.readlines()})
     f.close()
 
 
@@ -67,17 +70,17 @@ for g in ['190','254','60X']:
 #
 # ## Asynch results reader 
 
-def UpdateGlobal(filename, DictUpdates):
-    #Iterate in the updates keys
-    for k in DictUpdates:            
-        with fileinput.FileInput(filename, inplace=True) as file:
-            for line in file:                    
-                print(line.replace(DictUpdates[k]['old'], DictUpdates[k]['new']), end='')
-        
+#def UpdateGlobal(filename, DictUpdates):
+#    #Iterate in the updates keys
+#    for k in DictUpdates:
+#        with fileinput.FileInput(filename, inplace=True) as file:
+#            for line in file:
+#                print(line.replace(DictUpdates[k]['old'],DictUpdates[k]['new']), end = '')
+
 class hlmModel:
-    
+
     def __init__(self,linkid=None, path = None, ExtraParams = None, model_uid = 604):
-        '''Depending on the linkid or in the path the class starts a table 
+        '''Depending on the linkid or in the path the class starts a table
         to set up a new project fro HLM model.
             - linkid = number of link id to search for in the database.
             - path =  path to search for a WMF.SimuBasin project .nc
@@ -94,11 +97,29 @@ class hlmModel:
             self.wmfBasin.GetGeo_Cell_Basics()
             self.Table = cu.Transform_Basin2Asnych('/tmp/tmp.rvr',
                 lookup='/tmp/tmp.look',
-                prm='/tmp/tmp.prm') 
+                prm='/tmp/tmp.prm')
 
-    def write_control(self, linkList, path):
+    def write_control(self, path , linkList = None):
         '''Writes the control.sav file used by the model to determine at which links store the
         obtained results.'''
+        #If no link list it tries to obtain the control fronm the database
+        if linkList is None:
+            con = db.DataBaseConnect(user='nicolas', password='10A28Gir0')
+            if self.linkid > 0:
+                q = db.sql.SQL("SELECT distinct \
+                    us.link_id \
+                FROM \
+                    pers_nico.iowa_usgs_stations us, \
+                    pers_nico.subbasin("+str(self.linkid)+") sub \
+                where us.link_id = sub")
+            elif self.linkid == 0:
+                q = db.sql.SQL("SELECT distinct \
+                    us.link_id \
+                FROM \
+                    pers_nico.iowa_usgs_stations us, \
+                    pers_nico.master_lambda_vo mas \
+                where us.link_id = mas.link_id")
+            linkList = pd.read_sql(q, con).values.T.astype(int).tolist()[0]
         #Opens the file 
         f = open(path,'w')
         Links = self.Table.index.tolist()
@@ -121,78 +142,142 @@ class hlmModel:
         unix1 = str(aux.__datetime2unix__(date1))
         unix2 = str(aux.__datetime2unix__(date2))
         con = db.DataBaseConnect(database='rt_precipitation')
-        q = db.sql.SQL("WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM students.env_master_km \
+        if self.linkid > 0:
+            q = db.sql.SQL("WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM students.env_master_km \
          AS nodeX, students.env_master_km AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) \
          AND parentX.link_id = "+str(self.linkid)+") SELECT A.unix_time,sum(weight*A.val) as rain,B.link_id FROM stage_4.data AS \
          A,env_lookup_hrap_lid_v4 AS B,subbasin WHERE A.grid_x = B.x AND A.grid_y=B.y AND B.link_id = subbasin.link_id \
          AND A.unix_time >= "+str(unix1)+" AND A.unix_time < "+str(unix2)+" AND A.val < 99.0 GROUP BY B.link_id,A.unix_time ORDER BY A.unix_time")
+        else:
+            q = db.sql.SQL("SELECT \
+                    A.unix_time, \
+                    sum(weight*A.val) as rain, \
+                    B.link_id \
+                FROM \
+                    stage_4.data AS A, \
+                    env_lookup_hrap_lid_v4 AS B \
+                WHERE A.grid_x = B.x AND A.grid_y=B.y AND A.unix_time >= "+str(unix1)+" AND A.unix_time < "+str(unix2)+" AND A.val < 999.0 \
+                GROUP BY B.link_id,A.unix_time \
+                ORDER BY A.unix_time;")
         E = pd.read_sql(q, con, index_col='unix_time')
+        con.close()
         #SEtup for the data with the mean rainfall for that period
         d = pd.date_range(date1, date2, freq='1H')
         MeanRain = pd.Series(np.zeros(d.size), index = d)
         #Rainfall binary files creation
         for i in np.arange(E.index[0], E.index[-1], 3600):
             Rain = E[['link_id','rain']][E.index == i]
-            __saveBin__(Rain['link_id'].values, Rain['rain'].values, Rain['rain'].size,'Wapsi/rainfall/WapsiRain_'+str(i))
+            __saveBin__(Rain['link_id'].values, Rain['rain'].values, Rain['rain'].size,path+str(i))
             MeanRain[pd.to_datetime(i,unit='s')] = Rain['rain'].mean()
         MeanRain[np.isnan(MeanRain) == True] = 0.0
         return MeanRain
-            
-    def write_rvr(self, path, database = 'rt_precipitation'):
+
+    def write_rvr(self, path = None, database = 'rt_precipitation'):
         #conncet to the database
-        con = db.DataBaseConnect(database=database)
+        con = db.DataBaseConnect(user = 'nicolas', password = '10A28Gir0',)
         #restore_res_env_92
         #Query to ask for the link ids and the topology
-        q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM students.env_master_km) \
-         SELECT all_links.id,students.env_master_km.link_id FROM students.env_master_km,all_links \
-         WHERE (all_links.id IN (SELECT nodeX.link_id FROM students.env_master_km AS nodeX, students.env_master_km AS parentX \
-         WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(self.linkid)+")) AND students.env_master_km.parent_link = all_links.id ORDER BY all_links.id")            
+        if self.linkid > 0:
+            q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
+             SELECT all_links.id,pers_nico.master_lambda_vo FROM pers_nico.master_lambda_vo,all_links \
+             WHERE (all_links.id IN (SELECT nodeX.link_id FROM pers_nico.master_lambda_vo AS nodeX, \
+             pers_nico.master_lambda_vo AS parentX \
+             WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(self.linkid)+")) AND pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id")            
+        elif self.linkid == 0:
+            q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
+            SELECT DISTINCT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
+            WHERE all_links.id > 1 AND pers_nico.master_lambda_vo.model AND \
+            pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id;")
+
         self.topo = pd.read_sql(q, con)
         con.close()
         topo = self.topo.values.T
         #Convert the query to a rvr file 
-        f = open(path,'w')
-        f.write('%d\n\n' % topo.shape[1])
-        #List = self.Table.index.tolist()
-        for t in topo[1]:
-            #List.index(t)
-            f.write('%d\n'% t)
-            p = np.where(topo[0] == t)[0]
-            if len(p)>0:
-                f.write('%d ' % p.size)
-                for i in p:
-                    f.write('%d ' % topo[1][i])
-                f.write('\n\n')
+        if path is not None:
+            f = open(path,'w')
+            f.write('%d\n\n' % topo.shape[1])
+            #List = self.Table.index.tolist()
+            for t in topo[1]:
+                #List.index(t)
+                f.write('%d\n'% t)
+                p = np.where(topo[0] == t)[0]
+                if len(p)>0:
+                    f.write('%d ' % p.size)
+                    for i in p:
+                        f.write('%d ' % topo[1][i])
+                    f.write('\n\n')
+                else:
+                    f.write('0\n\n')    
+            f.close()
+        #Check for consistency with the Table
+        a = pd.Series(self.topo.shape[0], self.topo['link_id'].values)
+        b = 0
+        for i in self.Table.index:
+            if i in a.index:
+                b += 1
             else:
-                f.write('0\n\n')    
-        f.close()        
-    
-    def write_initial(self, path, initial = [1e-6, 0.0001, 0.05, 1.0]):
-        '''Writes an initial file for the model'''
+                self.Table = self.Table.drop(i, axis = 0)
+
+    def write_initial(self, path, initial = [1e-6, 0.0001, 0.05, 1.0], kind = 'uini',year = 2012):
+        '''Writes an initial file for the model
+        parameters:
+            - path: where to store the file.
+            - initial: vector for the uini or for the ini files.
+            - kind: defines the type of initial conditions:
+                - uini: uniform initial conditions.
+                - ini: non-uniform text based initial conditions.
+                - dbase: retrieve initial conditions from data base.
+            - year: initial year for the case of the kind =  dbase'''
         #opens the file
-        f = open(path, 'w')
-        f.write('%d\n' % self.model_uid)
-        f.write('0.000000\n')
-        for i in initial:
-            f.write('%.3e ' % i)
-        f.close()
-    
+        if kind == 'uini':
+            f = open(path, 'w')
+            f.write('%d\n' % self.model_uid)
+            f.write('0.000000\n')
+            for i in initial:
+                f.write('%.3e ' % i)
+            f.close()
+        elif kind == 'dbase':
+            t = "dbname=research_environment host=s-iihr51.iihr.uiowa.edu \
+port=5435 user=nicolas password=10A28Gir0 \
+\n\n1 \n\nSELECT link_id, state_0, state_1, state_2, state_3 \
+FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by link_id"
+            f = open(path, 'w')
+            f.write(t)
+            f.close()
+
+
     def write_Global(self, path2global, model_uid = 604,
-        date1 = None, date2 = None, rvrFile = None, prmFile = None, initialFile = None,
-        rainType = 5, rainPath = None, evpFile = 'evap.mon', datResults = None, 
-        controlFile = None, baseGlobal = None, noWarning = False):
+        date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,
+        initialType = 1,rainType = 5, rainPath = None, evpFile = 'evap.mon', datResults = None,
+        controlFile = None, baseGlobal = None, noWarning = False, snapType = 0,
+        snapPath = '', snapTime = ''):
         '''Creates a global file for the current project.
             - model_uid: is the number of hte model goes from 601 to 604.
             - date1 and date2: initial date and end date
             - rvrFile: path to rvr file.
+            - rvrType: 0: .rvr file, 1: databse .dbc file.
+            - rvrLink: 0: all the domain, N: number of the linkid.
             - prmFile: path to prm file.
+            - prmType: 0: .prm file, 1: databse .dbc file.
             - initialFile: path to file with initial conditions.
+            - initialType: type of initial file:
+                - 0: ini, 1: uini, 2: rec, 3: .dbc
             - rainType: number inficating the type of the rain to be used.
+                - 1: plain text with rainfall data for each link.
+                - 3: Database.
+                - 4: Uniform storm file: .ustr
+                - 5: Binary data with the unix time
             - rainPath: path to the folder containning the binary files of the rain.
+                or path to the file with the dabase
             - evpFile: path to the file with the values of the evp.
             - datResults: File where .dat files will be written.
             - controlFile: File with the number of the links to write.
-            - baseGlobal: give the option to use a base global that is not the default'''
+            - baseGlobal: give the option to use a base global that is not the default
+            - snapType: type of snapshot to make with the model:
+                - 0: no snapshot, 1: .rec file, 2: to database, 3: to hdf5, 4:
+                    recurrent hdf5
+            - snapPath: path to the snapshot.
+            - snapTime: time interval between snapshots (min)'''
         #Open the base global file and creates tyhe template
         if baseGlobal is not None:
             f = open(baseGlobal, 'r')
@@ -204,19 +289,31 @@ class hlmModel:
         for i in L:
             t += i
         Base = Template(''.join(t))
+        # Databse rainfall 
+        if rainType == 3 and rainPath is None:
+            rainPath = '/Dedicated/IFC/model_eval/forcing_rain51_5435_s4.dbc'
+        if rvrType == 1 and rvrFile is None:
+            rvrFile = '/Dedicated/IFC/model_eval/topo51.dbc'
         # Creates the default Dictionary.
         Default = {
             'model_uid' : model_uid,
             'date1': date1,
             'date2': date2,
             'rvrFile': rvrFile,
+            'rvrType': str(rvrType),
+            'rvrLink': str(rvrLink),
             'prmFile': prmFile,
+            'prmType': str(prmType),
             'initialFile': initialFile,
+            'initialType': initialType,
             'rainType': str(rainType),
             'rainPath': rainPath,
             'evpFile': Path + evpFile,
             'datResults': datResults,
             'controlFile': controlFile,
+            'snapType': str(snapType),
+            'snapPath': snapPath,
+            'snapTime': str(snapTime)
         }
         if date1 is not None:
             Default.update({'unix1': aux.__datetime2unix__(Default['date1'])})
@@ -271,33 +368,45 @@ class hlmModel:
                 process[k]['nproc'] = nCores        
             f.write('mpirun -np '+str(process[k]['nproc'])+' /Users/nicolas/Tiles/dist/bin/asynch '+k+secondplane)
         f.close()
-        
-    def set_parameters(self):
+
+    def set_parameters(self, Vr = 0.0041, ar = 1.67, Vs1 = 2.04e-7, Vs2 = 8.11e-6,
+        k1 = 0.0067, k2 = 2.0e-4, tl = 0.1, bl = 1.0, l1 = 0.2, l2 = -0.1, vo = 0.4,
+        VrF = '%.4f', arF = '%.2f', Vs1F = '%.2e', Vs2F = '%.2e', k1F = '%.4f', k2F = '%.2e',
+        tlF = '%.2f', blF = '%.2f', l1F = '%.2f', l2F = '%.2f', voF = '%.2f', DictP = None, DicOrder = None):
+        '''The parameters correspond to the model 604 if you want to put another parameters you
+        must use the variable DictP as an example this variable must be like:
+            - DictP['a']['value'] = [1,2,3,4,..., N],
+            - DictP['a']['format'] = '%.2f' 
+        The DicOrder vartiable must be use in order to determine the order to write the variables in the prm file
+        as an examples DicOrder = ['a', 'c','j','b','z'] otherwise the function probably will write it in disorder'''
         self.Formats = []
-        self.Table['Vr'] = 0.0041
-        self.Formats.append('%.4f')
-        self.Table['ar'] = 1.67
-        self.Formats.append('%.2f')
-        self.Table['Vs1'] = 2.04e-7#2.04e-6
-        self.Formats.append('%.2e')
-        self.Table['Vs2'] = 8.11e-6#1.11e-3#3.11e-3
-        self.Formats.append('%.2e')
-        self.Table['k1'] = 0.0067
-        self.Formats.append('%.4f')
-        self.Table['k2'] = 2.0e-4#1.66e-4
-        self.Formats.append('%.2e')
-        self.Table['tl'] = 0.12
-        self.Formats.append('%.2f')
-        self.Table['bl'] = 1.55
-        self.Formats.append('%.2f')
-        self.Table['l1'] = 0.25
-        self.Formats.append('%.2f')
-        self.Table['l2'] = -0.1
-        self.Formats.append('%.1f')
-        self.Table['vo'] = 0.4
-        self.Formats.append('%.1f')
-    
-    
+        self.Table['Vr'] = Vr
+        self.Formats.append(VrF)
+        self.Table['ar'] = ar
+        self.Formats.append(arF)
+        self.Table['Vs1'] = Vs1
+        self.Formats.append(Vs1F)
+        self.Table['Vs2'] = Vs2
+        self.Formats.append(Vs2F)
+        self.Table['k1'] = k1
+        self.Formats.append(k1F)
+        self.Table['k2'] = k2
+        self.Formats.append(k2F)
+        self.Table['tl'] = tl
+        self.Formats.append(tlF)
+        self.Table['bl'] = bl
+        self.Formats.append(blF)
+        self.Table['l1'] = l1
+        self.Formats.append(l1F)
+        self.Table['l2'] = l2
+        self.Formats.append(l2F)
+        self.Table['vo'] = vo
+        self.Formats.append(voF)
+        if DictP is not None:
+            for k in DicOrder:
+                self.Table[k] = DictP[k]['value']
+                self.Formats.append(DictP[k]['format'])
+
     def write_prm(self, ruta, extraNames = None, extraFormats = None):
         '''Writes the distributed prm file used for the 6XX model family'''
         #Converts the dataFrame to dict 
@@ -326,9 +435,9 @@ class hlmModel:
             f.write('\n\n')
         f.close()
 
-        
+
 class ASYNCH_results:
-    
+
     def __init__(self,path):
         '''Reads a .dat file produced by ASYNCH'''
         #Open the file 
@@ -360,6 +469,30 @@ class ASYNCH_results:
         Dates = pd.date_range(date1, periods=self.Nrec, freq=freq)
         return pd.Series(Data, Dates)
 
+    def ASYNCH_dat2SerieV2(self, linkID, date1, freq):
+        '''From the data readed with ASYNCH_read_dat reads the serie 
+        corresponding to the linkID and retrieves a pandas Series object.
+        Parameters:
+            - linkID: the number of the linkID to obtain.
+            - date1: the start date of the simulation.
+            - freq: time frequency of the data (ej. 15min).
+        Returns: 
+            - Pandas series with the simulated data.'''
+        #Number of records
+        self.Nlinks = int(self.dat[0])
+        self.Nrec = int(self.dat[3].split()[1])
+        Start = np.arange(3, (self.Nrec+2)*self.Nlinks, self.Nrec+2)
+        End = Start + self.Nrec
+        #Search the IDS
+        self.Ids = [l.split()[0] for l in self.dat[3::self.Nrec+2]]
+        #Search the position of the usgs station to be analyzed.
+        PosStat = self.Ids.index(str(linkID))
+        #Retrieve the data.
+        Data = np.array([np.array(l.split()).astype(float) for l in self.dat[Start[PosStat]+1:End[PosStat]+1]])
+        #return self.dat[Start[PosStat]+1:End[PosStat]+1]
+        Dates = pd.date_range(date1, periods=self.Nrec, freq=freq)
+        return pd.DataFrame(Data, Dates)
+    
     def Dat2Msg(link, folder):
         '''converts dat files to a msg serie'''
         L = glob.glob(folder+'254_*.dat')

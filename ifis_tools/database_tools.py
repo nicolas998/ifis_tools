@@ -235,16 +235,27 @@ def SQL_Get_WatershedFromMaster(linkID, otherParams = None):
     The otherParams is a list with the names stand for other parameters that can also be obtained from the querty
     Other names are: [k_i,k_dry, h_b, topsoil_thickness, k_d, slope]'''
     #Obtains the connection 
-    con = DataBaseConnect(user='nicolas', password='10A28Gir0', database='rt_precipitation')
+    con = DataBaseConnect(user='nicolas', password='10A28Gir0')
     #Set up the data that will ask for 
-    text1 = "WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM students.env_master_km AS nodeX, students.env_master_km AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(linkID)+") SELECT link_id, up_area, area, length" 
-    text2 = "FROM students.env_master_km WHERE link_id IN (SELECT * FROM subbasin)"
+    text1 = "WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM pers_nico.master_lambda_vo AS nodeX, pers_nico.master_lambda_vo AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(linkID)+") SELECT link_id, up_area/1e6 as up_area, area/1e6 as area, length/1000. as length" 
+    text2 = "FROM pers_nico.master_lambda_vo WHERE link_id IN (SELECT * FROM subbasin)"
     if otherParams is None:
-        q = sql.SQL(text1+' '+text2) 
+        if linkID>0:
+            q = sql.SQL(text1+' '+text2) 
+        elif linkID == 0:
+            text = "SELECT DISTINCT link_id, up_area/1e6 as up_area, area/1e6 as area, length/1000. as length FROM pers_nico.master_lambda_vo as mas WHERE mas.model"
+            q = sql.SQL(text)
     else:
-        for l in otherParams:
-            text1+= ',' + l +' '
-        q = sql.SQL(text1+text2) 
+        if linkID>0:
+            for l in otherParams:
+                text1+= ',' + l +' '
+            q = sql.SQL(text1+text2) 
+        elif linkID == 0:
+            text1 = "SELECT DISTINCT link_id, up_area/1e6 as up_area, area/1e6 as area, length/1000. as length "
+            text2 = "FROM pers_nico.master_lambda_vo AS mas WHERE mas.model"
+            for l in otherParams:
+                text1+= ',' + l +' '
+            q = sql.SQL(text1+text2) 
     #Get the data
     BasinData = pd.read_sql(q, con, index_col='link_id')
     con.close()
