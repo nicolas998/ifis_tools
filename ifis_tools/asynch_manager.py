@@ -28,7 +28,7 @@ from ifis_tools import database_tools as db
 try:
     from wmf import wmf
 except:
-    print('Unable to import WMF, cant create basins whit it')
+    print('Unable to import WMF!, cant create basins whit it')
 from string import Template
 from struct import pack, unpack
 import io
@@ -130,7 +130,7 @@ class hlmModel:
             except:
                 pass
         f.close()
-    
+
     def write_rainfall(self, date1, date2, path):
         '''Writes binary files for the rainfall of the defined watershed.
             - date1: initial date of the data to write.
