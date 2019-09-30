@@ -179,10 +179,10 @@ class hlmModel:
         #Query to ask for the link ids and the topology
         if self.linkid > 0:
             q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
-             SELECT all_links.id,pers_nico.master_lambda_vo FROM pers_nico.master_lambda_vo,all_links \
+             SELECT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
              WHERE (all_links.id IN (SELECT nodeX.link_id FROM pers_nico.master_lambda_vo AS nodeX, \
              pers_nico.master_lambda_vo AS parentX \
-             WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(self.linkid)+")) AND pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id")            
+             WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(self.linkid)+")) AND pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id")
         elif self.linkid == 0:
             q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
             SELECT DISTINCT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
@@ -207,7 +207,7 @@ class hlmModel:
                         f.write('%d ' % topo[1][i])
                     f.write('\n\n')
                 else:
-                    f.write('0\n\n')    
+                    f.write('0\n\n')
             f.close()
         #Check for consistency with the Table
         a = pd.Series(self.topo.shape[0], self.topo['link_id'].values)
