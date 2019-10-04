@@ -56,13 +56,15 @@ Path = __file__.split('/')
 Path = '/'.join(Path[:-1])+'/'
 
 #Read the global files that are used to generate new globals
-Globals = {}
-for g in ['190','254','60X']:
-    # 190 global base format 
-    f = open(Path+g+'BaseGlobal.gbl','r')
-    Globals.update({g:f.readlines()})
-    f.close()
-
+try:
+    Globals = {}
+    for g in ['190','254','60X']:
+        # 190 global base format 
+        f = open(Path+g+'BaseGlobal.gbl','r')
+        Globals.update({g:f.readlines()})
+        f.close()
+except:
+    print('Warning: no base globals copied, you have to use your own')
 
 # -
 
