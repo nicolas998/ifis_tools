@@ -18,20 +18,23 @@
 #
 # SEt of tools to get data from asynch and set the variables to run the model in an easy way from python.
 
-import pandas as pd
-from datetime import timezone, datetime
-import os
 import fileinput
+import io
+import os
+from datetime import datetime, timezone
+from string import Template
+from struct import pack, unpack
+
 import numpy as np
+import pandas as pd
+
 from ifis_tools import auxiliar as aux
 from ifis_tools import database_tools as db
+
 try:
     from wmf import wmf
 except:
     print('Unable to import WMF, cant create basins whit it')
-from string import Template
-from struct import pack, unpack
-import io
 
 
 def __saveBin__(lid, lid_vals, count, fn):
@@ -729,5 +732,3 @@ def __ASYNC_createProject__(self):
     aux.__make_folder__(self.path_in)
     self.path_out = self.path + '/AsynchOutputs'
     aux.__make_folder__(self.path_out)
-
-
