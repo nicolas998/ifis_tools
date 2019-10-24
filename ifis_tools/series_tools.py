@@ -41,6 +41,25 @@ class performance:
         '''Function to map any vatriable between a range'''
         return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min
 
+    def QpeakTimeDiff(self,qo,qs, ttime = None):
+        '''Calc the time difference between two hydrographs'''
+        to = qo.idxmax()
+        ts = qs.idxmax()
+        dt = to - ts
+        dt = dt.seconds / 3600.
+        if ttime is not None:
+            dt = dt / ttime
+        if to > ts:
+            return dt*-1
+        else:
+            return dt
+
+    def QpeakMagDiff(self,qo,qs):
+        '''Calc the magnitude difference between two hydrographs'''
+        qmo = qo.max()
+        qms = qs.max()
+        return (qmo - qms) / qmo
+
     def update_dic(self, name, base = False, path = 'not set', abr = 'not set'):
         '''Creates a dictionary for the performance of the model analysis:
         Parameters:
@@ -56,6 +75,27 @@ class performance:
                 'path': path,
                 'abr': abr},
         })
+
+    def percentiles(self, obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
+        '''Obtains the percentile for the sim value that corresponds to
+        an oberved value.
+        Parameters:
+            -obs: observed peaks or time serie.
+            -sim: simulated peaks or time serie.
+            -steps: number of splits to estimate the percentile.
+            -perc: percentile to estimate
+            -percMax: Max value to divide the observations.
+        Returns:
+            -A vector (2,N) where the first row corresponds to the percentiles
+            at the observation and the second to the percentiles at the simulation'''
+        if bins is None:
+            bins = np.linspace(obs.min(), np.percentile(obs, percMax), steps)
+        X = []; Y = []
+        for i,j in zip(bins[:-1], bins[1:]):
+            Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
+            X.append((i+j)/2.)
+            #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
+        return np.vstack([X,Y])
 
     def perform_analysis(self, link, qpeakmin, keys = None, yi = 2012, yf = 2018):
         '''Produce the performance analysis of several simulation by taking a 

@@ -8,11 +8,16 @@ $date2
 0	%Parameters to filenames
 
 %Components to print
-4
-State0
-State1
-State2
-State3
+$nComp
+$Comp0
+$Comp1
+$Comp2
+$Comp3
+$Comp4
+$Comp5
+$Comp6
+$Comp7
+$Comp8
 
 %Peakflow function
 Classic

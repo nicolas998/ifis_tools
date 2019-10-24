@@ -21,6 +21,7 @@
 import fileinput
 import io
 import os
+import sys
 from datetime import datetime, timezone
 from string import Template
 from struct import pack, unpack
@@ -55,19 +56,25 @@ Parameters = {'190': [6, 0.75, 0.33, -0.20, 0.50, 0.1, 2.2917e-5],
     '254':[12, 0.33, 0.2, -0.1, 0.02, 2.0425e-6, 0.02, 0.5, 0.10, 0.0, 99.0, 3.0, 0.75]}
 
 #Path of the file 
-Path = __file__.split('/')
-Path = '/'.join(Path[:-1])+'/'
-
+if os.name == 'posix':
+    Path = __file__.split('/')
+    Path = '/'.join(Path[:-1])+'/'
+elif os.name == 'nt':
+    ListPaths = sys.path
+    for l in ListPaths:
+        if l.split('\\')[-1] == 'site-packages':
+            Path = l
+    Path += '\\ifis_tools\\'
 #Read the global files that are used to generate new globals
-try:
-    Globals = {}
-    for g in ['190','254','60X']:
-        # 190 global base format 
-        f = open(Path+g+'BaseGlobal.gbl','r')
-        Globals.update({g:f.readlines()})
-        f.close()
-except:
-    print('Warning: no base globals copied, you have to use your own')
+#try:
+Globals = {}
+for g in ['190','254','60X']:
+    # 190 global base format 
+    f = open(Path+g+'BaseGlobal.gbl','r')
+    Globals.update({g:f.readlines()})
+    f.close()
+#except:
+ #   print('Warning: no base globals copied, you have to use your own')
 
 # -
 
@@ -75,12 +82,12 @@ except:
 #
 # ## Asynch results reader 
 
-#def UpdateGlobal(filename, DictUpdates):
-#    #Iterate in the updates keys
-#    for k in DictUpdates:
-#        with fileinput.FileInput(filename, inplace=True) as file:
-#            for line in file:
-#                print(line.replace(DictUpdates[k]['old'],DictUpdates[k]['new']), end = '')
+def UpdateGlobal(filename, DictUpdates):
+   #Iterate in the updates keys
+   for k in DictUpdates:
+       with fileinput.FileInput(filename, inplace=True) as file:
+           for line in file:
+               print(line.replace(DictUpdates[k]['old'],DictUpdates[k]['new']), end = '')
 
 class hlmModel:
 
@@ -126,7 +133,7 @@ class hlmModel:
                 where us.link_id = mas.link_id")
             linkList = pd.read_sql(q, con).values.T.astype(int).tolist()[0]
         #Opens the file 
-        f = open(path,'w')
+        f = open(path,'w',newline = '\n')
         Links = self.Table.index.tolist()
         for l in linkList:
             try:
@@ -199,7 +206,7 @@ class hlmModel:
         topo = self.topo.values.T
         #Convert the query to a rvr file 
         if path is not None:
-            f = open(path,'w')
+            f = open(path,'w',  newline='\n')
             f.write('%d\n\n' % topo.shape[1])
             #List = self.Table.index.tolist()
             for t in topo[1]:
@@ -235,7 +242,7 @@ class hlmModel:
             - year: initial year for the case of the kind =  dbase'''
         #opens the file
         if kind == 'uini':
-            f = open(path, 'w')
+            f = open(path, 'w',  newline='\n')
             f.write('%d\n' % self.model_uid)
             f.write('0.000000\n')
             for i in initial:
@@ -254,8 +261,8 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
     def write_Global(self, path2global, model_uid = 604,
         date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,
         initialType = 1,rainType = 5, rainPath = None, evpFile = 'evap.mon', datResults = None,
-        controlFile = None, baseGlobal = None, noWarning = False, snapType = 0,
-        snapPath = '', snapTime = ''):
+        nComponents = 1, Components = [0], controlFile = None, baseGlobal = None, noWarning = False, snapType = 0,
+        snapPath = '', snapTime = '', evpFromSysPath = False):
         '''Creates a global file for the current project.
             - model_uid: is the number of hte model goes from 601 to 604.
             - date1 and date2: initial date and end date
@@ -276,13 +283,16 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
                 or path to the file with the dabase
             - evpFile: path to the file with the values of the evp.
             - datResults: File where .dat files will be written.
+            - nComponents: Number of results to put in the .dat file.
+            - Components: Number of each component to write: [0,1,2,...,N]
             - controlFile: File with the number of the links to write.
             - baseGlobal: give the option to use a base global that is not the default
             - snapType: type of snapshot to make with the model:
                 - 0: no snapshot, 1: .rec file, 2: to database, 3: to hdf5, 4:
                     recurrent hdf5
             - snapPath: path to the snapshot.
-            - snapTime: time interval between snapshots (min)'''
+            - snapTime: time interval between snapshots (min)
+            - evpFromSysPath: add the path of the system to the evp file.'''
         #Open the base global file and creates tyhe template
         if baseGlobal is not None:
             f = open(baseGlobal, 'r')
@@ -299,6 +309,9 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
             rainPath = '/Dedicated/IFC/model_eval/forcing_rain51_5435_s4.dbc'
         if rvrType == 1 and rvrFile is None:
             rvrFile = '/Dedicated/IFC/model_eval/topo51.dbc'
+        #Chang  the evp path 
+        if evpFromSysPath:
+            evpFile = Path + evpFile
         # Creates the default Dictionary.
         Default = {
             'model_uid' : model_uid,
@@ -313,12 +326,13 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
             'initialType': initialType,
             'rainType': str(rainType),
             'rainPath': rainPath,
-            'evpFile': Path + evpFile,
+            'evpFile': evpFile,
             'datResults': datResults,
             'controlFile': controlFile,
             'snapType': str(snapType),
             'snapPath': snapPath,
-            'snapTime': str(snapTime)
+            'snapTime': str(snapTime),
+            'nComp': str(nComponents)
         }
         if date1 is not None:
             Default.update({'unix1': aux.__datetime2unix__(Default['date1'])})
@@ -328,6 +342,12 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
             Default.update({'unix2': aux.__datetime2unix__(Default['date2'])})
         else:
             Default.update({'unix2': '$'+'unix2'})
+        #Update the list of components to write
+        for n, c in enumerate(Components):
+            Default.update({'Comp'+str(n): 'State'+str(c)})
+        if nComponents <= 9:
+            for c in range(9-nComponents):
+                Default.update({'Comp'+str(8-c): 'XXXXX'})
         #Check for parameters left undefined
         D = {}
         for k in Default.keys():
@@ -338,9 +358,23 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
                     print('Warning: parameter ' + k +' left undefined model wont run')
                 D.update({k: '$'+k})
         #Update parameter on the base and write global 
-        f = open(path2global,'w')
+        f = open(path2global,'w', newline='\n')
         f.writelines(Base.substitute(D))
         f.close()
+        #Erase unused print components
+        f = open(path2global,'r')
+        L = f.readlines()
+        f.close()
+        flag = True
+        while flag:
+            try:
+                L.remove('XXXXX\n')
+            except:
+                flag = False
+        f = open(path2global,'w', newline='\n')
+        f.writelines(L)
+        f.close()
+
 
     def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1):
         '''Writes the .sh file that runs the model
@@ -361,7 +395,7 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
 /bin/echo In directory: `pwd`\n\
 /bin/echo Starting on: `date`\n']
 
-        f = open(path,'w')
+        f = open(path,'w',  newline='\n')
         f.write(L[0])
         f.write('\n')
 
@@ -421,7 +455,7 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         if ext != '.prm':
             ruta = path + '.prm'
         #Escritura 
-        f = open(ruta, 'w')
+        f = open(ruta, 'w', newline = '\n')
         f.write('%d\n\n' % len(D))
         for k in D.keys():
             f.write('%s\n' % k)

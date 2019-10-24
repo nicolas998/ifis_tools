@@ -8,11 +8,16 @@ $date2
 0	%Parameters to filenames
 
 %Components to print
-4
-State0
-State1
-State2
-State3
+$nComp
+$Comp0
+$Comp1
+$Comp2
+$Comp3
+$Comp4
+$Comp5
+$Comp6
+$Comp7
+$Comp8
 
 %Peakflow function
 Classic
@@ -26,13 +31,13 @@ Classic
 30 10 30
 
 %Topology (0 = .rvr, 1 = database)
-0 $rvrFile
+$rvrType $rvrLink $rvrFile
 
 %DEM Parameters (0 = .prm, 1 = database) Aup,Li,Ah,So,Vr,ar,Vs,as,k1,k2,t_l,b_l,Lam1,Lam2,Vo
-0 $prmFile
+$prmType $prmFile
 
 %Initial state (0 = .ini, 1 = .uini, 2 = .rec, 3 = .dbc)
-1 $initialFile
+$initialType $initialFile
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
 2
@@ -65,7 +70,7 @@ $unix1 $unix2
 3 %Peakflows
 
 %Snapshot information (0 = none, 1 = to .rec file, 2 = to database, 3 = to .h5 file, 4 = to recurrent .h5 file)
-0
+$snapType $snapTime $snapPath
 
 %Filename for scratch work
 /nfsscratch/Users/nicolas/

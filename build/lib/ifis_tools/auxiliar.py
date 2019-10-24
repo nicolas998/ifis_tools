@@ -22,7 +22,6 @@ import os
 from datetime import timezone, datetime
 import fileinput
 
-
 # +
 
 def __make_folder__(pathFolder):
