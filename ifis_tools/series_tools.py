@@ -365,50 +365,65 @@ def Events_Get_Peaks(Q, Qmin = None, tw = pd.Timedelta('12h')):
     #Return the result
     return QmaxCopy[PosMax].sort_index()
 
-def Events_Get_End(Q, Qmax, minDif = 0.04, minDistance = None,maxSearch = 10, Window = '1h'):
-    '''Find the end of each selected event in order to know the 
-    longitude of each recession event.
-    Parameters: 
-        - Q: Pandas series with the records.
-        - Qmax: Pandas series with the peak streamflows.
-        - minDif: The minimum difference to consider that a recession is over.
-    Optional:
-        - minDistance: minimum temporal distance between the peak and the end.
-        - maxSearch: maximum number of iterations to search for the end.
-        - Widow: Size of the temporal window used to smooth the streamflow 
-            records before the difference estimation (pandas format).
-    Returns: 
-        - Qend: The point indicating the en of the recession.'''
-    #Obtains the difference
-    X = Q.resample('1h').mean()
-    dX = X.values[1:] - X.values[:-1]
-    dX = pd.Series(dX, index=X.index[:-1])
-    #Obtains the points.
-    DatesEnds = []
-    Correct = []
-    for peakIndex in Qmax.index:
-        try:
-            a = dX[dX.index > peakIndex]
-            if minDistance is None:
-                DatesEnds.append(a[a>minDif].index[0])
-            else:
-                Dates = a[a>minDif].index
-                flag = True
-                c = 0
-                while flag:
-                    distancia = Dates[c] - peakIndex
-                    if distancia > minDistance:
-                        DatesEnds.append(Dates[c])
-                        flag= False
-                    c += 1
-                    if c>maxSearch: flag = False
-            Correct.append(0)
-        except:
-            DatesEnds.append(peakIndex)
-            Correct.append(1)
-    #Returns the pandas series with the values and end dates 
-    Correct = np.array(Correct)
-    return pd.Series(Q[DatesEnds], index=DatesEnds), Qmax[Correct == 0]
+def Events_Get_End(Q, Qpeaks):
+    '''Obtains the end of each event extracted by Events_Get_Peaks'''
+    #Expands the Qpeaks
+    Qpeaks = Qpeaks.append(Q[-1:])
+    Qpeaks.values[-1] = Qpeaks.max()
+    #Finds the ends
+    dates_min = []
+    val_mins = []
+    for star, end in zip(Qpeaks.index[:-1], Qpeaks.index[1:]):
+        dates_min.append(Q[star:end].idxmin())
+        val_mins.append(Q[star:end].min())
+    return pd.Series(val_mins, dates_min)
+
+# def Events_Get_End(Q, Qmax, minDif = 0.04, minDistance = None,maxSearch = 10, Window = '1h'):
+#     '''Find the end of each selected event in order to know the 
+#     longitude of each recession event.
+#     Parameters: 
+#         - Q: Pandas series with the records.
+#         - Qmax: Pandas series with the peak streamflows.
+#         - minDif: The minimum difference to consider that a recession is over.
+#     Optional:
+#         - minDistance: minimum temporal distance between the peak and the end.
+#         - maxSearch: maximum number of iterations to search for the end.
+#         - Widow: Size of the temporal window used to smooth the streamflow 
+#             records before the difference estimation (pandas format).
+#     Returns: 
+#         - Qend: The point indicating the en of the recession.'''
+#     #Obtains the difference
+#     X = Q.resample('1h').mean()
+#     dX = X.values[1:] - X.values[:-1]
+#     dX = pd.Series(dX, index=X.index[:-1])
+#     #Obtains the points.
+#     DatesEnds = []
+#     Correct = []
+#     for peakIndex in Qmax.index:
+#         try:
+#             a = dX[dX.index > peakIndex]
+#             if minDistance is None:
+#                 DatesEnds.append(a[a>minDif].index[0])
+#                 Correct.append(0)
+#             else:
+#                 Dates = a[a>minDif].index
+#                 flag = True
+#                 c = 0
+#                 while flag:
+#                     distancia = Dates[c] - peakIndex
+#                     if distancia > minDistance:
+#                         DatesEnds.append(Dates[c])
+#                         flag= False
+#                         Correct.append(0)
+#                     c += 1
+#                     if c>maxSearch:
+#                         flag = False
+#                         Correct.append(1)
+#         except:            
+#             Correct.append(1)
+#     #Returns the pandas series with the values and end dates 
+#     Correct = np.array(Correct)
+#     return pd.Series(Q[DatesEnds], index=DatesEnds), Qmax[Correct == 0]
 
 
 # -
