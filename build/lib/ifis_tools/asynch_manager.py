@@ -482,7 +482,7 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         f.close()
 
 
-class ASYNCH_results:
+class hlm_preprocess:
 
     def __init__(self,sav_path = None):
         '''Reads a .sav file to know wich links to extract'''
@@ -510,31 +510,6 @@ class ASYNCH_results:
         self.dat = f.readlines()
         f.close()
 
-    
-    # def ASYNCH_dat2Serie(self, linkID, date1, freq):
-    #     '''From the data readed with ASYNCH_read_dat reads the serie 
-    #     corresponding to the linkID and retrieves a pandas Series object.
-    #     Parameters:
-    #         - linkID: the number of the linkID to obtain.
-    #         - date1: the start date of the simulation.
-    #         - freq: time frequency of the data (ej. 15min).
-    #     Returns: 
-    #         - Pandas series with the simulated data.'''
-    #     #Number of records
-    #     self.Nlinks = int(self.dat[0])
-    #     self.Nrec = int(self.dat[3].split()[1])
-    #     Start = np.arange(3, (self.Nrec+2)*self.Nlinks, self.Nrec+2)
-    #     End = Start + self.Nrec
-    #     #Search the IDS
-    #     self.Ids = [l.split()[0] for l in self.dat[3::self.Nrec+2]]
-    #     #Search the position of the usgs station to be analyzed.
-    #     PosStat = self.Ids.index(str(linkID))
-    #     #Retrieve the data.
-    #     Data = np.array([float(l) for l in self.dat[Start[PosStat]+1:End[PosStat]+1]])
-    #     #return self.dat[Start[PosStat]+1:End[PosStat]+1]
-    #     Dates = pd.date_range(date1, periods=self.Nrec, freq=freq)
-    #     return pd.Series(Data, Dates)
-
     def dat_record2pandas(self, linkID, date1, freq):
         '''From the data readed with ASYNCH_read_dat reads the serie 
         corresponding to the linkID and retrieves a pandas Series object.
@@ -559,7 +534,8 @@ class ASYNCH_results:
         Dates = pd.date_range(date1, periods=self.Nrec, freq=freq)
         return pd.DataFrame(Data, Dates)
     
-    def dat_all2pandas(self, path_in, sim_name, path_out, start_date = '-04-01 01:00', freq = '1H', stage = 0):
+    def dat_all2pandas(self, path_in, sim_name, path_out, start_date = '-04-01 01:00', freq = '1H', stages = 'all', stages_names = None,
+        nickname = None):
         '''Takes a list of dat files or a dat file and extracts the simulated streamflow to records
         Parameters:
             - path_in: path with the .dat files.
@@ -568,7 +544,10 @@ class ASYNCH_results:
                 sim_name = hlm254, the function will only eval the hlm254* cases.
             - start_date: -mm-dd HH:MM of the initial date of the simulation.
             - freq: frequency of the simulation period.
-            - stage: storage of the dat file to be transformed.
+            - stages: storage of the dat file to be transformed, all stores all, otherwise it stores
+                just some of them.
+            - stages_names: names to put in the DataFrame for each column
+            - nickname: name to put to the output files instead of the sim_name.
         Results:
             - Writes an msgpack with pandas Series item for each link in the dat system'''
         #In functions
@@ -579,6 +558,9 @@ class ASYNCH_results:
             '''Finds the year of the .dat file, right now only supports files with the year on them'''
             m = re.search('\d{4}', name)
             return m.group()
+        #extension end Dataframe based on the stages
+        if type(stages) == list:
+            end_name = ''.join([str(i) for i in stages])
         #Defines dat lists
         dat_names = []
         dat_paths = []
@@ -610,31 +592,30 @@ class ASYNCH_results:
         for path,name,year in zip(dat_paths, dat_names, dat_years):
             #Reads the dat file 
             self.read_dat_file(path)
+            #Put the nickname
+            if nickname is not None:
+                name = nickname
+            #Process each link
             for link in self.links:
-                q = self.dat_record2pandas(link, str(year)+start_date, freq)
-                if first:
-                    q.to_msgpack(path_out+str(link)+'_'+name+'_'+str(stage)+'.msg')
+                #extract the info from the dat file
+                if stages is 'all':
+                    q = self.dat_record2pandas(link, str(year)+start_date, freq)
                 else:
-                    q_old = pd.read_msgpack(path_out+str(link)+'_'+name+'_'+str(stage)+'.msg')
+                    q = self.dat_record2pandas(link, str(year)+start_date, freq)[stages]
+                #Change column names 
+                if type(stages_names) == list:
+                    for i,j in zip(q.columns.values.tolist(),stages_names):
+                        q = q.rename(columns={i:j})
+                #Writes the maskpack
+                if first:
+                    q.to_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
+                else:
+                    q_old = pd.read_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
                     qtot = q_old.append(q)
-                    qtot.to_msgpack(path_out+str(link)+'_'+name+'_'+str(stage)+'.msg')
+                    qtot.to_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
             if floatBar:
                 f1.value+=1
             first = False
-
-    # def Dat2Msg(link, folder):
-    #     '''converts dat files to a msg serie'''
-    #     L = glob.glob(folder+'254_*.dat')
-    #     L.sort()
-    #     anos = [l.split('_')[1] for l in L]
-
-    #     dates = pd.date_range('2008-04-01','2019-12-30', freq='15min')
-    #     Qs = pd.Series(np.zeros(dates.size), index=dates)
-    #     for i,a in zip(L, anos):
-    #         d = am.ASYNCH_results(i)
-    #         qs = d.ASYNCH_dat2Serie(link, a+'-04-01', freq='15min')
-    #         Qs[qs.index] = qs.values
-    #     Qs.to_msgpack('/Users/nicolas/BaseData/HLM254/'+str(link)+'_all.msg')
 
 # ## Asynch project manager
 
