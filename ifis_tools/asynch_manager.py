@@ -484,6 +484,18 @@ class ASYNCH_results:
         self.dat = f.readlines()
         f.close()
 
+    def eval_links(self, sav_path):
+        '''Reads a .sav file with the number of the links to read from a .dat
+        (or eventually from a h5 file)
+        Params:
+            - sav_path: the path to the plain text .sav
+        Returns:
+            - self.links'''
+        f = open(sav_path)
+        self.links = f.readlines()
+        f.close()
+        self.links = [int(i) for i in self.links]
+
     def ASYNCH_dat2Serie(self, linkID, date1, freq):
         '''From the data readed with ASYNCH_read_dat reads the serie 
         corresponding to the linkID and retrieves a pandas Series object.
