@@ -619,7 +619,7 @@ class hlm_dat_process:
 
 # ## Asynch project manager
 
-class ASYNCH_project:
+class hlm_project:
     
     def __init__(self, path_in, path_out, name = None, date1 = None, date2 = None, 
         linkID = 0, unix1 = None, unix2 = None, model = '190',

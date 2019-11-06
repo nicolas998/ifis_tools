@@ -482,7 +482,7 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         f.close()
 
 
-class hlm_preprocess:
+class hlm_dat_process:
 
     def __init__(self,sav_path = None):
         '''Reads a .sav file to know wich links to extract'''
