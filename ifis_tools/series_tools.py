@@ -41,8 +41,16 @@ class performance:
         '''Function to map any vatriable between a range'''
         return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min
 
-    def QpeakTimeDiff(self,qo,qs, ttime = None):
-        '''Calc the time difference between two hydrographs'''
+    def func_qpeakTimeDiff(self,qo,qs, ttime = None):
+        '''Calc the time difference between two hydrographs
+        parameters:
+            - qo: observed hydrograph.
+            - qs: simulated hydrograph
+            - ttime: reference time for the hydrograph
+        returns:
+            - dt: delta time difference, 
+                - negative stands for time(sim) > time(obs): late arrival
+                - positibve time(sim) < time(obs): early arrival'''
         to = qo.idxmax()
         ts = qs.idxmax()
         dt = to - ts
@@ -54,26 +62,28 @@ class performance:
         else:
             return dt
 
-    def QpeakMagDiff(self,qo,qs):
+    def func_qpeakMagDiff(self,qo,qs):
         '''Calc the magnitude difference between two hydrographs'''
         qmo = qo.max()
         qms = qs.max()
         return (qmo - qms) / qmo
 
-    def update_dic(self, name, base = False, path = 'not set', abr = 'not set'):
+    def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = ''):
         '''Creates a dictionary for the performance of the model analysis:
         Parameters:
             -name: name to the model run or observed serie.
             -base: is this an observation or not?.
             -path: directory with the msgpack series of the links.
-            -abr: small name
+            -abr: small name.
+            -file_ending: text at the end of the files for that run
         Returns (no explicit return):
             Updates the dictionary with the information for the analysis with
             series.'''
         self.analysis_dic.update({
             name: {'base': base,
                 'path': path,
-                'abr': abr},
+                'abr': abr,
+                'file_ending': file_ending},
         })
 
     def percentiles(self, obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
@@ -137,7 +147,7 @@ class performance:
         yf += 1
         Data = {}
         for k in keys:
-            q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+'.msg')
+            q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
             #Updates data in a dictionary
             D = {k: {'q': q,
                     'base': self.analysis_dic[k]['base'],
