@@ -1,6 +1,9 @@
 import plotly.graph_objects as go 
 import pandas as pd 
 import numpy as np 
+import folium
+from folium import plugins
+import geopandas
 
 colors = {
     'greens' : ['#f7fcf5','#e5f5e0','#c7e9c0','#a1d99b','#74c476','#41ab5d','#238b45','#006d2c','#00441b'],
@@ -57,3 +60,88 @@ def Data4PlotSeries(Dic, file_path, name, year, color, mode = 'lines', width = 4
         Dic.update({name: {'s': q[str(year)], 'mode': mode, 
         'style' : {'color': color,  'size': width}}})
     return Dic
+
+def values2colors(values, colors, bins):
+    col_intervalo = np.array(['#b2182b' for i in range(values.size)])
+    for i,j,co in zip(bins[:-1], bins[1:],colors):
+        col_intervalo[(values>i) & (values<=j)] = co
+    return col_intervalo
+
+def leaflet_map(location = [42, -93], height = '70%', width = '80%', zoom_start = 9,
+    geoDataFrame = None, geo_name = None, geo_tool=None, geo_popup=None, geo_color=None):
+    #Defines the map 
+    m = folium.Map(
+            location=location,
+            height = height, 
+            width = width,
+            zoom_start = zoom_start
+        )
+    #Add maps tiles 
+    folium.TileLayer(tiles='Stamen Terrain',name="Stamen Terrain").add_to(m)
+    folium.TileLayer(tiles='OpenStreetMap',name="Open Street").add_to(m)
+    
+    if geoDataFrame is not None:
+        #Add features
+        fg = folium.FeatureGroup()
+        m.add_child(fg)
+        g1 = plugins.FeatureGroupSubGroup(fg, geo_name)
+        m.add_child(g1)
+
+        #plot the stations
+        for i in range(geoDataFrame.shape[0]):
+            x = geoDataFrame['geometry'][i].x
+            y = geoDataFrame['geometry'][i].y
+            td = '%.2f' % geoDataFrame[geo_tool][i]
+            g1.add_child(folium.CircleMarker(location=[y,x], radius=10,
+                    popup ='<b>Id: </b>%s'%(str(geoDataFrame[geo_popup][i])), 
+                    tooltip ='<b>val: </b>%s'%(td), 
+                    line_color='#3186cc',
+                    line_width = 0.5,
+                    fill_color= geoDataFrame[geo_color][i],
+                    fill_opacity=0.7, 
+                    fill=True))
+    folium.LayerControl().add_to(m)
+    return m
+
+class leaflet_map_class:
+
+    def __init__(self, location = [42, -93], height = '70%', width = '80%', zoom_start = 9, **kwargs):
+        self.m = folium.Map(
+            location=location,
+            height = height, 
+            width = width,
+            zoom_start = zoom_start
+        )
+        #Add maps tiles 
+        folium.TileLayer(tiles='Stamen Terrain',name="Stamen Terrain").add_to(self.m)
+        folium.TileLayer(tiles='OpenStreetMap',name="Open Street").add_to(self.m)
+        folium.LayerControl().add_to(self.m)
+        #Add rthe groups option
+        
+
+    def add_points(self, geoDataFrame, name_col, color_col = '#2c7fb8', popup_col = None):
+        '''Add a set of points to the leaflet map'''
+        #Creates a group for that layer
+        fg = folium.FeatureGroup()
+        self.m.add_child(fg)
+        g1 = plugins.FeatureGroupSubGroup(fg, name_col)
+        self.m.add_child(g1)
+
+        #plot the stations
+        for i in range(geoDataFrame.shape[0]):
+            x = geoDataFrame['geometry'][i].x
+            y = geoDataFrame['geometry'][i].y
+            td = '%.2f' % geoDataFrame[name_col][i]
+            g1.add_child(folium.CircleMarker(location=[y,x], radius=10,
+                    popup ='<b>Id: </b>%s'%(str(geoDataFrame[popup_col][i])), 
+                    tooltip ='<b>val: </b>%s'%(td), 
+                    line_color='#3186cc',
+                    line_width = 0.5,
+                    fill_color=geoDataFrame[color_col][i],
+                    fill_opacity=0.7, 
+                    fill=True))
+        #folium.LayerControl().add_to(self.m)
+
+    def display(self):
+        '''Shows the map'''
+        self.m

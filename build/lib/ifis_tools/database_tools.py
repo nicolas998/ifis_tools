@@ -25,8 +25,14 @@ from climata.usgs import InstantValueIO, DailyValueIO
 import numpy as np 
 from ifis_tools import auxiliar as aux
 
+data_usr = None
+data_pass = None
+data_host = "s-iihr51.iihr.uiowa.edu"
+data_base = "research_environment"
+data_port = "5435"
+
 # +
-def DataBaseConnect(user = "iihr_student", password = "iihr.student", host = "s-iihr51.iihr.uiowa.edu",
+def DataBaseConnect(user = "iihr_student", password = "iihr.student", host = data_host,
     port = "5435", database = "research_environment"):
     '''Connect to the database that hsa stored the usgs information'''
     con = psycopg2.connect(user = user,
