@@ -534,15 +534,22 @@ class hlm_dat_process:
         Dates = pd.date_range(date1, periods=self.Nrec, freq=freq)
         return pd.DataFrame(Data, Dates)
     
-    def dat_all2pandas(self, path_in, sim_name, path_out, start_date = '-04-01 01:00', freq = '1H', stages = 'all', stages_names = None,
+    def dat_all2pandas(self, path_in, path_out, sim_name=None, initial_name = '',
+        start_year = '2000', start_date = '-04-01 01:00', freq = '1H', stages = 'all', stages_names = None,
         nickname = None):
         '''Takes a list of dat files or a dat file and extracts the simulated streamflow to records
         Parameters:
-            - path_in: path with the .dat files.
+            - path_in: path with the .dat files, no extension if the user want to process 
+                multiple years and mus use sim_name. Otherwise give the full path to 
+                the .dat and dont use sim_name
             - sim_name: name of the simulations that correspond to the .dat files
                 eg. if in the folder there are: hlm254_2012.dat, hlm254_2013.dat, hlm604_2012.dat and 
                 sim_name = hlm254, the function will only eval the hlm254* cases.
+                WARNING: this works for files of the same setup with several years.
+            - path_out: path to put outfiles.
+            - initial_name: initial strings of the files that are goinig to be analyzed.
             - start_date: -mm-dd HH:MM of the initial date of the simulation.
+            - start_year: the year to start if cant find the yar from the .dat files name
             - freq: frequency of the simulation period.
             - stages: storage of the dat file to be transformed, all stores all, otherwise it stores
                 just some of them.
@@ -560,29 +567,48 @@ class hlm_dat_process:
             return m.group()
         #extension end Dataframe based on the stages
         if type(stages) == list:
-            end_name = ''.join([str(i) for i in stages])
+            if type(stages_names) == list:
+                end_name = '-'.join([str(i) for i in stages_names])
+            else:
+                end_name = '-'.join([str(i) for i in stages])
         #Defines dat lists
         dat_names = []
         dat_paths = []
         dat_years = []
         #Raw dat files in a folder
-        dat_list_raw = glob.glob(path_in+'*.dat')
-        dat_list_raw.sort()
-        #Finds ths dat files that has the specified name
-        for i in dat_list_raw:
-            try:
-                if os.name == 'nt':
-                    #Windows
-                    name = find_sim_name(i.split('\\')[1], sim_name)
-                if os.name == 'posix':
-                    #Linux
-                    name = find_sim_name(i.split('/')[-1], sim_name)
-                if name == sim_name:
-                    dat_names.append(name)
-                    dat_paths.append(i)
-                    dat_years.append(find_year(i.split('/')[-1]))
-            except:
-                pass
+        if sim_name is not None:
+            dat_list_raw = glob.glob(path_in + '*.dat')
+            dat_list_raw.sort()
+            #Finds ths dat files that has the specified name
+            for i in dat_list_raw:
+                try:
+                    if os.name == 'nt':
+                        #Windows
+                        name = find_sim_name(i.split('\\')[1], sim_name)
+                        print(name)
+                    if os.name == 'posix':
+                        #Linux
+                        name = find_sim_name(i.split('/')[-1], sim_name)
+                    if name == sim_name:
+                        dat_names.append(name)
+                        dat_paths.append(i)
+                        dat_years.append(find_year(i.split('/')[-1]))
+                except:
+                    pass
+        else:
+            if os.name == 'nt':
+                dat_names = [path_in.split('\\')[-1].split('.')[0]]
+                try:                
+                    dat_years = [find_year(path_in).split('\\')[-1].split('.')[0]]
+                except:
+                    dat_years = [start_year,]
+            elif os.name == 'posix':
+                dat_names = [path_in.split('/')[-1].split('.')[0],]
+                try:                
+                    dat_years = [find_year(path_in).split('/')[-1].split('.')[0],]
+                except:
+                    dat_years = [start_year,]
+            dat_paths = [path_in,]
         #Reads the dat files and writes the msg packs.
         if floatBar:
             f1 = FloatProgress(min =0, max = len(dat_paths))
