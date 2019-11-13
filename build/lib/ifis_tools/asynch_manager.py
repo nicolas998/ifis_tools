@@ -571,30 +571,33 @@ class hlm_dat_process:
                 end_name = '-'.join([str(i) for i in stages_names])
             else:
                 end_name = '-'.join([str(i) for i in stages])
+        else:
+            end_name = ''
         #Defines dat lists
         dat_names = []
         dat_paths = []
         dat_years = []
         #Raw dat files in a folder
-        if sim_name is not None:
+        if sim_name is None:
             dat_list_raw = glob.glob(path_in + '*.dat')
             dat_list_raw.sort()
+            print(dat_list_raw)
             #Finds ths dat files that has the specified name
             for i in dat_list_raw:
                 try:
                     if os.name == 'nt':
                         #Windows
-                        name = find_sim_name(i.split('\\')[1], sim_name)
+                        name = find_sim_name(i.split('\\')[1], initial_name)
                         print(name)
                     if os.name == 'posix':
                         #Linux
-                        name = find_sim_name(i.split('/')[-1], sim_name)
-                    if name == sim_name:
+                        name = find_sim_name(i.split('/')[-1], initial_name)
+                    if name == initial_name:
                         dat_names.append(name)
                         dat_paths.append(i)
                         dat_years.append(find_year(i.split('/')[-1]))
-                except:
-                    pass
+                except OSError as err:
+                    print("OS error: {0}".format(err))
         else:
             if os.name == 'nt':
                 dat_names = [path_in.split('\\')[-1].split('.')[0]]
