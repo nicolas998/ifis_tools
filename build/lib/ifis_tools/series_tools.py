@@ -68,7 +68,8 @@ class performance:
         qms = qs.max()
         return (qmo - qms) / qmo
 
-    def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = ''):
+    def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = '',
+        isDataFrame = False, DataFrameColumn = ''):
         '''Creates a dictionary for the performance of the model analysis:
         Parameters:
             -name: name to the model run or observed serie.
@@ -76,6 +77,8 @@ class performance:
             -path: directory with the msgpack series of the links.
             -abr: small name.
             -file_ending: text at the end of the files for that run
+            -isDataFrame: if the data came from a data frame.
+            -DataFrameColumn: the name of the column to extract from the data. 
         Returns (no explicit return):
             Updates the dictionary with the information for the analysis with
             series.'''
@@ -83,7 +86,9 @@ class performance:
             name: {'base': base,
                 'path': path,
                 'abr': abr,
-                'file_ending': file_ending},
+                'file_ending': file_ending,
+                'isDataFrame': isDataFrame,
+                'DataFrameColumn': DataFrameColumn},
         })
 
     def percentiles(self, obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
@@ -147,7 +152,11 @@ class performance:
         yf += 1
         Data = {}
         for k in keys:
-            q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
+            if self.analysis_dic[k]['isDataFrame']:
+                q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
+                q = q[self.analysis_dic[k]['DataFrameColumn']]
+            else:
+                q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
             #Updates data in a dictionary
             D = {k: {'q': q,
                     'base': self.analysis_dic[k]['base'],
