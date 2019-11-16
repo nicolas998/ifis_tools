@@ -6,7 +6,7 @@ from numpy.distutils.core import setup, Extension
 
 setup(
     name='ifis_tools',
-    version='0.1.6',
+    version='0.1.7',
     author='Nicolas Velasquez G',
     author_email='nicolas.velasquezgiron@gmail.com',    
     packages=['ifis_tools'],
