@@ -168,7 +168,7 @@ class performance:
           elif min4event.startswith('P'):
             per = float(min4event[1:])
             if per>1.0: per = per/100.
-            min4event = q[q.notnull()].quantile(per)      
+            min4event = q[q.notnull()].quantile(per)
           #Get tyhe events for that station
           pos,ph = __find_peaks__(q, min4event, distance = link_tt)
           self.analysis_dic[k]['data']['peaks'] = q.index[pos]
@@ -247,6 +247,7 @@ class performance:
     PBIAS = []
     NASH = []
     product = []
+    Areas = []
 
     #Iterate in all the models
     for k in self.analysis_dic.keys():
@@ -268,6 +269,7 @@ class performance:
               #Good date
               Dates.append(date)
               product.append(k)
+              Areas.append(self.link_prop['area'][int(self.link_act)])
               #Get the performance of the qpeak max
               QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
               Qpeak.append(np.nanmax(qst))
@@ -284,10 +286,10 @@ class performance:
               NASH.append(self.__func_nse__(qot, qst))
 
     #Convert to a Data frame with the results.
-    D = pd.DataFrame(np.array([product, Qpeak, RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]).T, 
-          index = Dates, columns = ['product','qpeak','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias'], )
+    D = pd.DataFrame(np.array([product, Qpeak, Areas,RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]).T, 
+          index = Dates, columns = ['product','qpeak','area','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias'], )
     convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
-      'nse':'float', 'pbias':'float', 'Imax':'float'}
+      'nse':'float', 'pbias':'float', 'Imax':'float', 'area': 'float'}
     D = D.astype(convert)
     D['link'] = self.link_act
     return D
