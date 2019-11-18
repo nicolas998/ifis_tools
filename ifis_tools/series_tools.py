@@ -23,8 +23,9 @@
 import pandas as pd 
 import numpy as np 
 from multiprocessing import Pool
+import glob
+from scipy.signal import find_peaks as __find_peaks__
 from hydroeval import evaluator, kge
-from scipy.signal import find_peaks 
 # ## Digital filters
 #
 # Collection of functions to separate runoff from baseflow.
@@ -55,6 +56,10 @@ class performance:
         self.link_prop = links_prop
         self.link_prop = self.link_prop.rename(columns = prop_col_names)[[prop_col_names[k] for k in prop_col_names.keys()]]
   
+  def __mapVar__(self, x, new_min = 0, new_max = 1):
+      '''Function to map any vatriable between a range'''
+      return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min    
+
   def __intersection__(self, n_list1, n_list2): 
     '''Get the intersection of two links lists'''
     lst1 = self.analysis_dic[n_list1]['link_names']
@@ -102,7 +107,11 @@ class performance:
     qmo = qo.max()
     qms = qs.max()
     return (qmo - qms) / qmo
-    
+
+  def __func_qpeakKGE__(self, qo, qs):
+    '''Gets the KGE for an event'''    
+    return evaluator(kge, qs.values, qo.values)[0][0]
+
   def set_link2analyze(self, link, min4event = 'P90', link_tt = 30.):
     '''For a link read the data of the different options
     Parameters:
@@ -132,7 +141,7 @@ class performance:
             if per>1.0: per = per/100.
             min4event = q[q.notnull()].quantile(per)
           #Get tyhe events for that station
-          pos,ph = find_peaks(q, min4event, distance = link_tt)
+          pos,ph = __find_peaks__(q, min4event, distance = link_tt)
           self.analysis_dic[k]['data']['peaks'] = q.index[pos]
           self.link_mpeak = ph['peak_heights']
       except:
@@ -179,17 +188,23 @@ class performance:
       })
       #If has the base makes the intersect to hav just the good links
       if self.base_name is not None and name != self.base_name:
+        # Gets the intersection of the links
         links_names, links_paths = self.__intersection__(self.base_name, name)
         self.analysis_dic[name]['link_paths'] = links_paths
         self.analysis_dic[name]['link_names'] = links_names
+        #Updates the intersection of all the evaluable links
+        self.links_eval = links_names
 
   #To make ealuations by events
-  def eval_by_events(self, link = None, hydrograph_size = None):
+  def eval_by_events(self, link = None, min4peak = None):
     '''Get the performance of multiple excecutions for all the events of that link'''
     
     if link is not None:
-      args = {'link_tt': }
-      self.set_link2analyze(link, link_tt = self.link_prop['ttime'][link])
+      args = {'link_tt': self.link_prop['ttime'][int(link)]}
+      if min4peak is not None:
+        args.update({'min4event' : min4peak})
+      
+      self.set_link2analyze(link, **args)
 
     #Define list to fill 
     Dates = []
@@ -197,6 +212,7 @@ class performance:
     TimePeak = []
     QpeakMDiff = []
     QpeakTDiff = []
+    KGE = []
     product = []
 
     #Iterate in all the models
@@ -218,26 +234,22 @@ class performance:
             #Good date
             Dates.append(date)
             product.append(k)
-            #Get the performance 
+            #Get the performance of the qpeak max
             QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
             Qpeak.append(np.nanmax(qst))
+            #Time performance
             travelDif = self.__func_qpeakTimeDiff__(qot, qst)
             TimePeak.append(travelDif /self.link_tt)
             QpeakTDiff.append(travelDif)
+            #Overall performance
+            KGE.append(self.__func_qpeakKGE__(qot, qst))
 
     #Convert to a Data frame with the results.
-    D = pd.DataFrame(np.array([product, Qpeak, TimePeak, QpeakMDiff, QpeakTDiff]).T, 
-          index = Dates, columns = ['product','qpeak','tpeak','qpeakDiff','peakTime'], )
-    convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','peakTime':'float'}
+    D = pd.DataFrame(np.array([product, Qpeak, TimePeak, QpeakMDiff, QpeakTDiff, KGE]).T, 
+          index = Dates, columns = ['product','qpeak','tpeak','qpeakDiff','peakTime','kge'], )
+    convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','peakTime':'float','kge':'float'}
     D = D.astype(convert)
     return D
-
-
-
-  def mapVar(self, x, new_min = 0, new_max = 1):
-      '''Function to map any vatriable between a range'''
-      return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min
-
 
 
     # class performance:
