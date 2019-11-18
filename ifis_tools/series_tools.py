@@ -36,7 +36,7 @@ class performance:
 
   #Initialization and hide functions
   def __init__(self, temp_scale = '1H', links_prop = None, 
-      prop_col_names = None):
+      prop_col_names = None, rain_path = None, rain_ending = ''):
       '''class for the performance analysos of model simulations
       Params:
         - temp_scale: temporal scale at which the analysis will be done.
@@ -44,7 +44,11 @@ class performance:
         related with the area and the travel time of the watershed.
         -prop_col_names: dictionary with the actual name in the link_prop and 
         the name for this tool. which are 'area' for the acumulated area and 
-        'ttime' for the travel time'''
+        'ttime' for the travel time
+        -rain_path: the path to find the mean reainfall series of each watershed
+          This is relevant for the some of the performance metrics, if not given they
+          will be deactivated.
+        -rain_ending: the name at the end of the rainfall files (if exist)'''
       #Define initial things of the class        
       self.analysis_dic = {}
       self.base_name = None
@@ -55,6 +59,10 @@ class performance:
       if links_prop is not None:
         self.link_prop = links_prop
         self.link_prop = self.link_prop.rename(columns = prop_col_names)[[prop_col_names[k] for k in prop_col_names.keys()]]
+      #Rainfall path 
+      if rain_path is not None:
+        self.update_dic('rain', False, path = rain_path, abr = 'r', file_ending = rain_ending)
+        self.__has_rain__ = True
   
   def __mapVar__(self, x, new_min = 0, new_max = 1):
       '''Function to map any vatriable between a range'''
@@ -108,9 +116,26 @@ class performance:
     qms = qs.max()
     return (qmo - qms) / qmo
 
-  def __func_qpeakKGE__(self, qo, qs):
+  def __func_KGE__(self, qo, qs):
     '''Gets the KGE for an event'''    
     return evaluator(kge, qs.values, qo.values)[0][0]
+
+  def __func_pbias__(self, qo, qs):
+    '''Gets the Percent bias for an event'''    
+    return evaluator(pbias, qs.values, qo.values)[0]
+
+  def __func_nse__(self, qo, qs):
+    '''Gets the Nash for an event'''    
+    return evaluator(nse, qs.values, qo.values)[0]
+
+  def __func_qpeakTravelTime__(self, q):
+    ttime = int(self.link_tt)*4
+    dt = pd.Timedelta(str(ttime)+'H')
+    peakMax = q.idxmax()
+    max_r_idx = self.link_r[peakMax-dt:peakMax].idxmax()
+    max_r_val = self.link_r[peakMax-dt:peakMax].max()
+    ttime = peakMax - max_r_idx
+    return max_r_val, ttime.seconds/3600.
 
   def set_link2analyze(self, link, min4event = 'P90', link_tt = 30.):
     '''For a link read the data of the different options
@@ -131,6 +156,10 @@ class performance:
         if self.analysis_dic[k]['isDataFrame']:       
           q = q[self.analysis_dic[k]['DataFrameColumn']]
         self.analysis_dic[k]['data']['q'] = q.resample(self.temp_scale).mean()
+        self.link_q = q.resample(self.temp_scale).mean()
+        #rainfall data 
+        if self.__has_rain__:
+          self.link_r = pd.read_msgpack(self.analysis_dic['rain']['link_paths'][pos])
         #Gert the events for the base
         if k == self.base_name:
           #Set the type of minimum value
@@ -139,11 +168,12 @@ class performance:
           elif min4event.startswith('P'):
             per = float(min4event[1:])
             if per>1.0: per = per/100.
-            min4event = q[q.notnull()].quantile(per)
+            min4event = q[q.notnull()].quantile(per)      
           #Get tyhe events for that station
           pos,ph = __find_peaks__(q, min4event, distance = link_tt)
           self.analysis_dic[k]['data']['peaks'] = q.index[pos]
           self.link_mpeak = ph['peak_heights']
+          self.link_tpeak = q.index[pos]
       except:
         #If any error just put nan
         self.analysis_dic[k]['data']['q'] = np.nan
@@ -210,47 +240,57 @@ class performance:
     Dates = []
     Qpeak = []
     TimePeak = []
+    RainPeak = []
     QpeakMDiff = []
     QpeakTDiff = []
     KGE = []
+    PBIAS = []
+    NASH = []
     product = []
 
     #Iterate in all the models
     for k in self.analysis_dic.keys():
+      if k != 'rain':
+        #Get data
+        qs = self.analysis_dic[k]['data']['q']
+        qo = self.analysis_dic['usgs']['data']['q']
+        dt = pd.Timedelta(str(self.link_tt)+'H')
 
-      #Get data
-      qs = self.analysis_dic[k]['data']['q']
-      qo = self.analysis_dic['usgs']['data']['q']
-      dt = pd.Timedelta(str(self.link_tt)+'H')
-
-      for date in self.analysis_dic[self.base_name]['data']['peaks']:
-        qot = qo[date-dt:date+dt]
-        qst = qs[date-dt:date+dt]
-        if len(qot)>0 and len(qst)>0:
-          good_o = qot[qot.notnull()].size / qot.size
-          good_s = qst[qst.notnull()].size / qst.size
-          #Only makes the calculus if both series have more than half of their records
-          if good_o > 0.5 and good_s > 0.5:
-            #Good date
-            Dates.append(date)
-            product.append(k)
-            #Get the performance of the qpeak max
-            QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
-            Qpeak.append(np.nanmax(qst))
-            #Time performance
-            travelDif = self.__func_qpeakTimeDiff__(qot, qst)
-            TimePeak.append(travelDif /self.link_tt)
-            QpeakTDiff.append(travelDif)
-            #Overall performance
-            KGE.append(self.__func_qpeakKGE__(qot, qst))
+        for date in self.analysis_dic[self.base_name]['data']['peaks']:
+          qot = qo[date-dt:date+dt]
+          qst = qs[date-dt:date+dt]
+          rt = self.link_r[date-dt*4:date+dt]
+          if len(qot)>0 and len(qst)>0 and len(qot) == len(qst) and len(rt)>len(qot):
+            good_o = qot[qot.notnull()].size / qot.size
+            good_s = qst[qst.notnull()].size / qst.size
+            #Only makes the calculus if both series have more than half of their records
+            if good_o > 0.5 and good_s > 0.5:
+              #Good date
+              Dates.append(date)
+              product.append(k)
+              #Get the performance of the qpeak max
+              QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
+              Qpeak.append(np.nanmax(qst))
+              #Time performance            
+              travelDif = self.__func_qpeakTimeDiff__(qot, qst)
+              QpeakTDiff.append(travelDif)
+              #Get the oberved and simulated travel time
+              i_max,tpeak = self.__func_qpeakTravelTime__(qst)
+              TimePeak.append(tpeak)
+              RainPeak.append(i_max)
+              #Overall performance
+              KGE.append(self.__func_KGE__(qot, qst))
+              PBIAS.append(self.__func_pbias__(qot, qst))
+              NASH.append(self.__func_nse__(qot, qst))
 
     #Convert to a Data frame with the results.
-    D = pd.DataFrame(np.array([product, Qpeak, TimePeak, QpeakMDiff, QpeakTDiff, KGE]).T, 
-          index = Dates, columns = ['product','qpeak','tpeak','qpeakDiff','peakTime','kge'], )
-    convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','peakTime':'float','kge':'float'}
+    D = pd.DataFrame(np.array([product, Qpeak, RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]).T, 
+          index = Dates, columns = ['product','qpeak','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias'], )
+    convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
+      'nse':'float', 'pbias':'float', 'Imax':'float'}
     D = D.astype(convert)
+    D['link'] = self.link_act
     return D
-
 
     # class performance:
 
