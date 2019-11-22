@@ -23,8 +23,9 @@
 import pandas as pd 
 import numpy as np 
 from multiprocessing import Pool
+import glob
+from scipy.signal import find_peaks as __find_peaks__
 from hydroeval import evaluator, kge
-
 # ## Digital filters
 #
 # Collection of functions to separate runoff from baseflow.
@@ -33,238 +34,499 @@ from hydroeval import evaluator, kge
 
 class performance:
 
-    def __init__(self):
-        '''class for the performance analysos of model simulations'''        
-        self.analysis_dic = {}
+  #Initialization and hide functions
+  def __init__(self, temp_scale = '1H', links_prop = None, 
+      prop_col_names = None, rain_path = None, rain_ending = ''):
+      '''class for the performance analysos of model simulations
+      Params:
+        - temp_scale: temporal scale at which the analysis will be done.
+        -links_prop: a data frame that must have link_id as index, and columns 
+        related with the area and the travel time of the watershed.
+        -prop_col_names: dictionary with the actual name in the link_prop and 
+        the name for this tool. which are 'area' for the acumulated area and 
+        'ttime' for the travel time
+        -rain_path: the path to find the mean reainfall series of each watershed
+          This is relevant for the some of the performance metrics, if not given they
+          will be deactivated.
+        -rain_ending: the name at the end of the rainfall files (if exist)'''
+      #Define initial things of the class        
+      self.analysis_dic = {}
+      self.base_name = None
+      self.temp_scale = temp_scale
+      self.link_act = None
+      self.tocompare = []
+      #Get link props that is a dataFrame
+      if links_prop is not None:
+        self.link_prop = links_prop
+        self.link_prop = self.link_prop.rename(columns = prop_col_names)[[prop_col_names[k] for k in prop_col_names.keys()]]
+      #Rainfall path 
+      if rain_path is not None:
+        self.update_dic('rain', False, path = rain_path, abr = 'r', file_ending = rain_ending)
+        self.__has_rain__ = True
+  
+  def __mapVar__(self, x, new_min = 0, new_max = 1):
+      '''Function to map any vatriable between a range'''
+      return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min    
 
-    def mapVar(self, x, new_min = 0, new_max = 1):
-        '''Function to map any vatriable between a range'''
-        return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min
+  def __intersection__(self, n_list1, n_list2): 
+    '''Get the intersection of two links lists'''
+    lst1 = self.analysis_dic[n_list1]['link_names']
+    lst2 = self.analysis_dic[n_list2]['link_names'] 
+    paths2 = self.analysis_dic[n_list2]['link_paths'] 
+    valueN = []
+    pathsN = []
+    for value,path in zip(lst2, paths2):
+      if value in lst1:
+        valueN.append(value)
+        pathsN.append(path)
+    return valueN, pathsN 
 
-    def func_qpeakTimeDiff(self,qo,qs, ttime = None):
-        '''Calc the time difference between two hydrographs
-        parameters:
-            - qo: observed hydrograph.
-            - qs: simulated hydrograph
-            - ttime: reference time for the hydrograph
-        returns:
-            - dt: delta time difference, 
-                - negative stands for time(sim) > time(obs): late arrival
-                - positibve time(sim) < time(obs): early arrival'''
-        to = qo.idxmax()
-        ts = qs.idxmax()
-        dt = to - ts
-        dt = dt.seconds / 3600.
-        if ttime is not None:
-            dt = dt / ttime
-        if to > ts:
-            return dt*-1
-        else:
-            return dt
+  def __path2name__(self, paths):
+    '''Extracts the link numbers from a list of paths.'''
+    names = []
+    for i in paths:
+      j = i.split('/')[-1]
+      names.append(''.join([s for s in j if s.isdigit()]))
+    return names
 
-    def func_qpeakMagDiff(self,qo,qs):
-        '''Calc the magnitude difference between two hydrographs'''
-        qmo = qo.max()
-        qms = qs.max()
-        return (qmo - qms) / qmo
+  def __func_qpeakTimeDiff__(self,qo,qs, ttime = None):
+      '''Calc the time difference between two hydrographs
+      parameters:
+          - qo: observed hydrograph.
+          - qs: simulated hydrograph
+          - ttime: reference time for the hydrograph
+      returns:
+          - dt: delta time difference, 
+              - negative stands for time(sim) > time(obs): late arrival
+              - positibve time(sim) < time(obs): early arrival'''
+      to = qo.idxmax()
+      ts = qs.idxmax()
+      dt = to - ts
+      dt = dt.seconds / 3600.
+      if ttime is not None:
+          dt = dt / ttime
+      if to > ts:
+          return dt*-1
+      else:
+          return dt
 
-    def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = '',
-        isDataFrame = False, DataFrameColumn = ''):
-        '''Creates a dictionary for the performance of the model analysis:
-        Parameters:
-            -name: name to the model run or observed serie.
-            -base: is this an observation or not?.
-            -path: directory with the msgpack series of the links.
-            -abr: small name.
-            -file_ending: text at the end of the files for that run
-            -isDataFrame: if the data came from a data frame.
-            -DataFrameColumn: the name of the column to extract from the data. 
-        Returns (no explicit return):
-            Updates the dictionary with the information for the analysis with
-            series.'''
-        self.analysis_dic.update({
-            name: {'base': base,
-                'path': path,
-                'abr': abr,
-                'file_ending': file_ending,
-                'isDataFrame': isDataFrame,
-                'DataFrameColumn': DataFrameColumn},
-        })
+  def __func_qpeakMagDiff__(self,qo,qs):
+    '''Calc the magnitude difference between two hydrographs'''
+    qmo = qo.max()
+    qms = qs.max()
+    return (qmo - qms) / qmo
 
-    def percentiles(self, obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
-        '''Obtains the percentile for the sim value that corresponds to
-        an oberved value.
-        Parameters:
-            -obs: observed peaks or time serie.
-            -sim: simulated peaks or time serie.
-            -steps: number of splits to estimate the percentile.
-            -perc: percentile to estimate
-            -percMax: Max value to divide the observations.
-        Returns:
-            -A vector (2,N) where the first row corresponds to the percentiles
-            at the observation and the second to the percentiles at the simulation'''
-        if bins is None:
-            bins = np.linspace(obs.min(), np.percentile(obs, percMax), steps)
-        X = []; Y = []
-        for i,j in zip(bins[:-1], bins[1:]):
-            Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
-            X.append((i+j)/2.)
-            #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
-        return np.vstack([X,Y])
+  def __func_KGE__(self, qo, qs):
+    '''Gets the KGE for an event'''    
+    return evaluator(kge, qs.values, qo.values)[0][0]
 
-    def perform_analysis(self, link, qpeakmin, keys = None, yi = 2012, yf = 2018):
-        '''Produce the performance analysis of several simulation by taking a 
-        dictionary with the information of the series names, path and abreviation.
-        Parameters:
-            -ForAnalysis: Dictionary with the structure given by Dic4Analysis.
-            -link: number of the link to be analyzed, the link must be saved in a msgpack
-                format under the path given by the dictionary of ForAnalysis.
-            -qpeakmin: minimum value to consider a qpeak.
-            -keys: (optional) if not given it takes the keys from the dictionary.
-            - yi and yf: initial and end year of the anlysis.
-        Returns:
-            - Metrics: DataFrame with the metrics for the models.
-            - QpeakAnalysis: DataFrmae with the metrics of all the peaks found.'''
-        #Define function to obtain median value
-        def median(x):
-            try:
-                return np.percentile(x, 50)
-            except:
-                pass 
-        def FindMax(Serie, Smax, tw = '1W'):
-            index = []
-            values = []
-            shared = []
-            dt = pd.Timedelta(tw)
-            for i in Smax.index:
-                try:
-                    val = Serie[i-dt:i+dt].max()
-                    if val > 0:
-                        index.append(Serie[i-dt:i+dt].idxmax())
-                        values.append(val)
-                        shared.append(i)
-                except:
-                    pass
-            return pd.Series(values, index), shared       
-        #Read the data
-        if keys is None:
-            keys = [k for k in self.analysis_dic.keys()]
-        yf += 1
-        Data = {}
-        for k in keys:
-            if self.analysis_dic[k]['isDataFrame']:
-                q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
-                q = q[self.analysis_dic[k]['DataFrameColumn']]
-            else:
-                q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
-            #Updates data in a dictionary
-            D = {k: {'q': q,
-                    'base': self.analysis_dic[k]['base'],
-                    'abr': self.analysis_dic[k]['abr']}}
-            #If it is the base obtains the peak values
-            if self.analysis_dic[k]['base']:
-                qo = q.copy()
-                qo_max = Events_Get_Peaks(q, qpeakmin, tw = pd.Timedelta('5d'))
-                D[k].update({'qmax': qo_max})
-            Data.update(D)
-        #Produce the analysis
-        Metrics = {}    
-        for k in keys:
-            if self.analysis_dic[k]['base'] is False:
-                #Obtains the peaks in the simulation
-                key_sim = k
-                qs = Data[k]['q']
-                qs_max, sh = FindMax(qs, qo_max)
-                #Obtain peak differences metrics 
-                qpeakMagDiff = (qo_max[sh].values - qs_max.values) / qo_max[sh].values
-                #Differences at the time to peak
-                qpeakTimeDiff = qo_max[sh].index - qs_max.index
-                pos = np.where(qo_max[sh].index > qs_max.index)[0]
-                qpeakTimeDiff = qpeakTimeDiff.seconds / 3600.
-                qpeakTimeDiff = qpeakTimeDiff.values
-                qpeakTimeDiff[pos] = -1*qpeakTimeDiff[pos]
-                #Yearly differences
-                kge_val = []
-                VolDif = []
-                Qannual = []
-                Dtannual = []
-                Anos = []
-                qpAnnual = pd.Series(qpeakMagDiff, index=qo_max[sh].index)
-                qpAnnual = qpAnnual.resample('A').apply(median)
-                dtAnnual = pd.Series(qpeakTimeDiff, index=qo_max[sh].index)
-                dtAnnual = dtAnnual.resample('A').apply(median)            
-                for i in range(yi,yf):
-                    pos = np.where(np.isnan(qs[str(i)]) == False)[0]
-                    qsimOver = qo[qs[str(i)].index[pos]].values
-                    kge_temp = evaluator(kge, qs[str(i)].values[pos], qo[qs[str(i)].index[pos]].values)[0][0]
-                    voldif_temp = ((np.nansum(qsimOver)*3600/1e6) -(qs[str(i)].sum()*3600/1e6)) / (np.nansum(qsimOver)*3600/1e6)
-                    if kge_temp > -999:
-                        try:
-                            #print(i,qpAnnual[str(i)].values[0])
-                            Qannual.append(qpAnnual[str(i)].values[0])
-                            Dtannual.append(dtAnnual[str(i)].values[0])
-                        except:
-                            Qannual.append(np.nan)
-                            Dtannual.append(np.nan)
-                        kge_val.append(kge_temp)
-                        VolDif.append(voldif_temp)
-                        Anos.append(pd.Timestamp(year = i, month = 12, day = 31))            
-            else:            
-                key_base = k
-                qs_max = qo_max.copy()
-                sh = qs_max.index
-                qpeakMagDiff = np.zeros(qs_max.size)
-                qpeakTimeDiff = np.zeros(qs_max.size)
-                kge_val = np.ones(np.arange(yi,yf).size) 
-                VolDif =  np.zeros(np.arange(yi,yf).size)
-                Qannual = np.zeros(np.arange(yi,yf).size)
-                Dtannual = np.zeros(np.arange(yi,yf).size)
-                Anos = []
-                for i in range(yi,yf):
-                    Anos.append(pd.Timestamp(year = i, month = 12, day = 31))
+  def __func_pbias__(self, qo, qs):
+    '''Gets the Percent bias for an event'''    
+    return evaluator(pbias, qs.values, qo.values)[0]
+
+  def __func_nse__(self, qo, qs):
+    '''Gets the Nash for an event'''    
+    return evaluator(nse, qs.values, qo.values)[0]
+
+  def __func_qpeakTravelTime__(self, q):
+    ttime = int(self.link_tt)*4
+    dt = pd.Timedelta(str(ttime)+'H')
+    peakMax = q.idxmax()
+    max_r_idx = self.link_r[peakMax-dt:peakMax].idxmax()
+    max_r_val = self.link_r[peakMax-dt:peakMax].max()
+    ttime = peakMax - max_r_idx
+    return max_r_val, ttime.seconds/3600.
+
+  def set_link2analyze(self, link, min4event = 'P90', link_tt = 30.):
+    '''For a link read the data of the different options
+    Parameters:
+      - link: the link to analyze.
+      - min4event: the minim value to consider an event, could be a number or 
+      the percentile (eg P50, P60, P90)
+      - link_tt: traver time of the link is to determine the length of the hydrograph.
+    Returns:
+      - Updates the analysis_dic of the performance class'''
+    self.link_act = link
+    self.link_tt = link_tt
+    for k in self.analysis_dic:
+      pos = self.analysis_dic[k]['link_names'].index(str(link))      
+      try:
+        #reads the data
+        q = pd.read_msgpack(self.analysis_dic[k]['link_paths'][pos])
+        if self.analysis_dic[k]['isDataFrame']:       
+          q = q[self.analysis_dic[k]['DataFrameColumn']]
+        self.analysis_dic[k]['data']['q'] = q.resample(self.temp_scale).mean()
+        self.link_q = q.resample(self.temp_scale).mean()
+        #rainfall data 
+        if self.__has_rain__:
+          self.link_r = pd.read_msgpack(self.analysis_dic['rain']['link_paths'][pos])
+        #Gert the events for the base
+        if k == self.base_name:
+          #Set the type of minimum value
+          if type(min4event) == int or type(min4event) == float:
+            qmin = min4event
+          elif min4event.startswith('P'):
+            per = float(min4event[1:])
+            if per>1.0: per = per/100.
+            min4event = q[q.notnull()].quantile(per)      
+          #Get tyhe events for that station
+          pos,ph = __find_peaks__(q, min4event, distance = link_tt)
+          self.analysis_dic[k]['data']['peaks'] = q.index[pos]
+          self.link_mpeak = ph['peak_heights']
+          self.link_tpeak = q.index[pos]
+      except:
+        #If any error just put nan
+        self.analysis_dic[k]['data']['q'] = np.nan
+
+  #Function to update the main analysiis dic.
+  def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = '',
+      isDataFrame = False, DataFrameColumn = ''):
+      '''Creates a dictionary for the performance of the model analysis:
+      Parameters:
+          -name: name to the model run or observed serie.
+          -base: is this an observation or not?.
+          -path: directory with the msgpack series of the links.
+          -abr: small name.
+          -file_ending: text at the end of the files for that run
+          -isDataFrame: if the data came from a data frame.
+          -DataFrameColumn: the name of the column to extract from the data. 
+      Returns (no explicit return):
+          Updates the dictionary with the information for the analysis with
+          series.'''
+      #Defines if it is the base key
+      if base:
+        self.base_name = name
+      else:
+        self.tocompare.append(name)
+      #Get the links and paths to the links of that class
+      links_paths = glob.glob(path+file_ending+'*.msg')
+      links_names = self.__path2name__(links_paths)
+      #Updates the information of the performance dictionary
+      self.analysis_dic.update({
+          name: {'base': base,
+              'path': path,
+              'abr': abr,
+              'file_ending': file_ending,
+              'isDataFrame': isDataFrame,
+              'DataFrameColumn': DataFrameColumn,
+              'link_paths': links_paths,
+              'link_names': links_names,
+              'data':{
+                  'q': None,
+                  'peaks': None
+              }},
+      })
+      #If has the base makes the intersect to hav just the good links
+      if self.base_name is not None and name != self.base_name:
+        # Gets the intersection of the links
+        links_names, links_paths = self.__intersection__(self.base_name, name)
+        self.analysis_dic[name]['link_paths'] = links_paths
+        self.analysis_dic[name]['link_names'] = links_names
+        #Updates the intersection of all the evaluable links
+        self.links_eval = links_names
+
+  #To make ealuations by events
+  def eval_by_events(self, link = None, min4peak = None):
+    '''Get the performance of multiple excecutions for all the events of that link'''
+    
+    if link is not None:
+      args = {'link_tt': self.link_prop['ttime'][int(link)]}
+      if min4peak is not None:
+        args.update({'min4event' : min4peak})
+      
+      self.set_link2analyze(link, **args)
+
+    #Define list to fill 
+    Dates = []
+    Qpeak = []
+    TimePeak = []
+    RainPeak = []
+    QpeakMDiff = []
+    QpeakTDiff = []
+    KGE = []
+    PBIAS = []
+    NASH = []
+    product = []
+
+    #Iterate in all the models
+    for k in self.analysis_dic.keys():
+      if k != 'rain':
+        #Get data
+        qs = self.analysis_dic[k]['data']['q']
+        qo = self.analysis_dic['usgs']['data']['q']
+        dt = pd.Timedelta(str(self.link_tt)+'H')
+
+        for date in self.analysis_dic[self.base_name]['data']['peaks']:
+          qot = qo[date-dt:date+dt]
+          qst = qs[date-dt:date+dt]
+          rt = self.link_r[date-dt*4:date+dt]
+          if len(qot)>0 and len(qst)>0 and len(qot) == len(qst) and len(rt)>len(qot):
+            good_o = qot[qot.notnull()].size / qot.size
+            good_s = qst[qst.notnull()].size / qst.size
+            #Only makes the calculus if both series have more than half of their records
+            if good_o > 0.5 and good_s > 0.5:
+              #Good date
+              Dates.append(date)
+              product.append(k)
+              #Get the performance of the qpeak max
+              QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
+              Qpeak.append(np.nanmax(qst))
+              #Time performance            
+              travelDif = self.__func_qpeakTimeDiff__(qot, qst)
+              QpeakTDiff.append(travelDif)
+              #Get the oberved and simulated travel time
+              i_max,tpeak = self.__func_qpeakTravelTime__(qst)
+              TimePeak.append(tpeak)
+              RainPeak.append(i_max)
+              #Overall performance
+              KGE.append(self.__func_KGE__(qot, qst))
+              PBIAS.append(self.__func_pbias__(qot, qst))
+              NASH.append(self.__func_nse__(qot, qst))
+
+    #Convert to a Data frame with the results.
+    D = pd.DataFrame(np.array([product, Qpeak, RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]).T, 
+          index = Dates, columns = ['product','qpeak','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias'], )
+    convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
+      'nse':'float', 'pbias':'float', 'Imax':'float'}
+    D = D.astype(convert)
+    D['link'] = self.link_act
+    return D
+
+    # class performance:
+
+    #     def __init__(self):
+    #         '''class for the performance analysos of model simulations'''        
+    #         self.analysis_dic = {}
+
+    #     def mapVar(self, x, new_min = 0, new_max = 1):
+    #         '''Function to map any vatriable between a range'''
+    #         return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min
+
+    #     def func_qpeakTimeDiff(self,qo,qs, ttime = None):
+    #         '''Calc the time difference between two hydrographs
+    #         parameters:
+    #             - qo: observed hydrograph.
+    #             - qs: simulated hydrograph
+    #             - ttime: reference time for the hydrograph
+    #         returns:
+    #             - dt: delta time difference, 
+    #                 - negative stands for time(sim) > time(obs): late arrival
+    #                 - positibve time(sim) < time(obs): early arrival'''
+    #         to = qo.idxmax()
+    #         ts = qs.idxmax()
+    #         dt = to - ts
+    #         dt = dt.seconds / 3600.
+    #         if ttime is not None:
+    #             dt = dt / ttime
+    #         if to > ts:
+    #             return dt*-1
+    #         else:
+    #             return dt
+
+    #     def func_qpeakMagDiff(self,qo,qs):
+    #         '''Calc the magnitude difference between two hydrographs'''
+    #         qmo = qo.max()
+    #         qms = qs.max()
+    #         return (qmo - qms) / qmo
+
+    #     def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = '',
+    #         isDataFrame = False, DataFrameColumn = ''):
+    #         '''Creates a dictionary for the performance of the model analysis:
+    #         Parameters:
+    #             -name: name to the model run or observed serie.
+    #             -base: is this an observation or not?.
+    #             -path: directory with the msgpack series of the links.
+    #             -abr: small name.
+    #             -file_ending: text at the end of the files for that run
+    #             -isDataFrame: if the data came from a data frame.
+    #             -DataFrameColumn: the name of the column to extract from the data. 
+    #         Returns (no explicit return):
+    #             Updates the dictionary with the information for the analysis with
+    #             series.'''
+    #         self.analysis_dic.update({
+    #             name: {'base': base,
+    #                 'path': path,
+    #                 'abr': abr,
+    #                 'file_ending': file_ending,
+    #                 'isDataFrame': isDataFrame,
+    #                 'DataFrameColumn': DataFrameColumn},
+    #         })
+
+    #     def percentiles(self, obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
+    #         '''Obtains the percentile for the sim value that corresponds to
+    #         an oberved value.
+    #         Parameters:
+    #             -obs: observed peaks or time serie.
+    #             -sim: simulated peaks or time serie.
+    #             -steps: number of splits to estimate the percentile.
+    #             -perc: percentile to estimate
+    #             -percMax: Max value to divide the observations.
+    #         Returns:
+    #             -A vector (2,N) where the first row corresponds to the percentiles
+    #             at the observation and the second to the percentiles at the simulation'''
+    #         if bins is None:
+    #             bins = np.linspace(obs.min(), np.percentile(obs, percMax), steps)
+    #         X = []; Y = []
+    #         for i,j in zip(bins[:-1], bins[1:]):
+    #             Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
+    #             X.append((i+j)/2.)
+    #             #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
+    #         return np.vstack([X,Y])
+
+    #     def perform_analysis(self, link, qpeakmin, keys = None, yi = 2012, yf = 2018):
+    #         '''Produce the performance analysis of several simulation by taking a 
+    #         dictionary with the information of the series names, path and abreviation.
+    #         Parameters:
+    #             -ForAnalysis: Dictionary with the structure given by Dic4Analysis.
+    #             -link: number of the link to be analyzed, the link must be saved in a msgpack
+    #                 format under the path given by the dictionary of ForAnalysis.
+    #             -qpeakmin: minimum value to consider a qpeak.
+    #             -keys: (optional) if not given it takes the keys from the dictionary.
+    #             - yi and yf: initial and end year of the anlysis.
+    #         Returns:
+    #             - Metrics: DataFrame with the metrics for the models.
+    #             - QpeakAnalysis: DataFrmae with the metrics of all the peaks found.'''
+    #         #Define function to obtain median value
+    #         def median(x):
+    #             try:
+    #                 return np.percentile(x, 50)
+    #             except:
+    #                 pass 
+    #         def FindMax(Serie, Smax, tw = '1W'):
+    #             index = []
+    #             values = []
+    #             shared = []
+    #             dt = pd.Timedelta(tw)
+    #             for i in Smax.index:
+    #                 try:
+    #                     val = Serie[i-dt:i+dt].max()
+    #                     if val > 0:
+    #                         index.append(Serie[i-dt:i+dt].idxmax())
+    #                         values.append(val)
+    #                         shared.append(i)
+    #                 except:
+    #                     pass
+    #             return pd.Series(values, index), shared       
+    #         #Read the data
+    #         if keys is None:
+    #             keys = [k for k in self.analysis_dic.keys()]
+    #         yf += 1
+    #         Data = {}
+    #         for k in keys:
+    #             if self.analysis_dic[k]['isDataFrame']:
+    #                 q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
+    #                 q = q[self.analysis_dic[k]['DataFrameColumn']]
+    #                 print(q.type)
+    #             else:
+    #                 q = pd.read_msgpack(self.analysis_dic[k]['path']+str(link)+self.analysis_dic[k]['file_ending']+'.msg')
+    #             #Updates data in a dictionary
+    #             D = {k: {'q': q,
+    #                     'base': self.analysis_dic[k]['base'],
+    #                     'abr': self.analysis_dic[k]['abr']}}
+    #             #If it is the base obtains the peak values
+    #             if self.analysis_dic[k]['base']:
+    #                 qo = q.copy()
+    #                 qo_max = Events_Get_Peaks(q, qpeakmin, tw = pd.Timedelta('5d'))
+    #                 D[k].update({'qmax': qo_max})
+    #             Data.update(D)
+    #         #Produce the analysis
+    #         Metrics = {}    
+    #         for k in keys:
+    #             if self.analysis_dic[k]['base'] is False:
+    #                 #Obtains the peaks in the simulation
+    #                 key_sim = k
+    #                 qs = Data[k]['q']
+    #                 qs_max, sh = FindMax(qs, qo_max)
+    #                 #Obtain peak differences metrics 
+    #                 qpeakMagDiff = (qo_max[sh].values - qs_max.values) / qo_max[sh].values
+    #                 #Differences at the time to peak
+    #                 qpeakTimeDiff = qo_max[sh].index - qs_max.index
+    #                 pos = np.where(qo_max[sh].index > qs_max.index)[0]
+    #                 qpeakTimeDiff = qpeakTimeDiff.seconds / 3600.
+    #                 qpeakTimeDiff = qpeakTimeDiff.values
+    #                 qpeakTimeDiff[pos] = -1*qpeakTimeDiff[pos]
+    #                 #Yearly differences
+    #                 kge_val = []
+    #                 VolDif = []
+    #                 Qannual = []
+    #                 Dtannual = []
+    #                 Anos = []
+    #                 qpAnnual = pd.Series(qpeakMagDiff, index=qo_max[sh].index)
+    #                 qpAnnual = qpAnnual.resample('A').apply(median)
+    #                 dtAnnual = pd.Series(qpeakTimeDiff, index=qo_max[sh].index)
+    #                 dtAnnual = dtAnnual.resample('A').apply(median)            
+    #                 for i in range(yi,yf):
+    #                     pos = np.where(np.isnan(qs[str(i)]) == False)[0]
+    #                     qsimOver = qo[qs[str(i)].index[pos]].values
+    #                     kge_temp = evaluator(kge, qs[str(i)].values[pos], qo[qs[str(i)].index[pos]].values)[0][0]
+    #                     voldif_temp = ((np.nansum(qsimOver)*3600/1e6) -(qs[str(i)].sum()*3600/1e6)) / (np.nansum(qsimOver)*3600/1e6)
+    #                     if kge_temp > -999:
+    #                         try:
+    #                             #print(i,qpAnnual[str(i)].values[0])
+    #                             Qannual.append(qpAnnual[str(i)].values[0])
+    #                             Dtannual.append(dtAnnual[str(i)].values[0])
+    #                         except:
+    #                             Qannual.append(np.nan)
+    #                             Dtannual.append(np.nan)
+    #                         kge_val.append(kge_temp)
+    #                         VolDif.append(voldif_temp)
+    #                         Anos.append(pd.Timestamp(year = i, month = 12, day = 31))            
+    #             else:            
+    #                 key_base = k
+    #                 qs_max = qo_max.copy()
+    #                 sh = qs_max.index
+    #                 qpeakMagDiff = np.zeros(qs_max.size)
+    #                 qpeakTimeDiff = np.zeros(qs_max.size)
+    #                 kge_val = np.ones(np.arange(yi,yf).size) 
+    #                 VolDif =  np.zeros(np.arange(yi,yf).size)
+    #                 Qannual = np.zeros(np.arange(yi,yf).size)
+    #                 Dtannual = np.zeros(np.arange(yi,yf).size)
+    #                 Anos = []
+    #                 for i in range(yi,yf):
+    #                     Anos.append(pd.Timestamp(year = i, month = 12, day = 31))
+                    
+    #             #Update the dictionary.
+    #             MetQp = np.vstack([qs_max, qpeakMagDiff, qpeakTimeDiff]).T
+    #             idxQp = qo_max[sh].index
+    #             columnsQp = ['qpeak','qpeakMagDif', 'qpeakTimeDif']
+    #             MetEff = np.vstack([kge_val, VolDif, Qannual, Dtannual]).T
+    #             idxEff = Anos
+    #             columnsEff = ['kge', 'VolDif', 'qpeakMagDif', 'qpeakTimeDif']
+    #             Metrics.update({
+    #                 k:{
+    #                     'link': link,
+    #                     'qpeakMetrics': pd.DataFrame(MetQp, index = idxQp, columns = columnsQp),
+    #                     'effMetrics': pd.DataFrame(MetEff, index = idxEff, columns = columnsEff)
+    #                 }
+    #             })
                 
-            #Update the dictionary.
-            MetQp = np.vstack([qs_max, qpeakMagDiff, qpeakTimeDiff]).T
-            idxQp = qo_max[sh].index
-            columnsQp = ['qpeak','qpeakMagDif', 'qpeakTimeDif']
-            MetEff = np.vstack([kge_val, VolDif, Qannual, Dtannual]).T
-            idxEff = Anos
-            columnsEff = ['kge', 'VolDif', 'qpeakMagDif', 'qpeakTimeDif']
-            Metrics.update({
-                k:{
-                    'link': link,
-                    'qpeakMetrics': pd.DataFrame(MetQp, index = idxQp, columns = columnsQp),
-                    'effMetrics': pd.DataFrame(MetEff, index = idxEff, columns = columnsEff)
-                }
-            })
-            
-        #Converts everything into a DataFrame
-        usgs_idx = Metrics[key_base]['qpeakMetrics'].index
-        model_idx = Metrics[key_sim]['qpeakMetrics'].index
-        shared_idx = model_idx.intersection(usgs_idx)
-        Metrics[key_base]['qpeakMetrics'] = Metrics[key_base]['qpeakMetrics'].loc[shared_idx]
-        initial = 'usgs'
-        QpeakAnalysis = Metrics[key_base]['qpeakMetrics']
-        QpeakAnalysis['model'] = key_base
-        QpeakAnalysis['link'] = link
-        for k in Metrics.keys():
-            if k != initial:
-                a = Metrics[k]['qpeakMetrics']
-                a['model'] = k
-                a['link'] = link
-                QpeakAnalysis = QpeakAnalysis.append(a)
-        #Converts metrics into a dataFrame
-        MetrData = Metrics[key_base]['effMetrics']
-        MetrData['model'] = key_base
-        MetrData['link'] = link
-        for k in Metrics.keys():
-            if k != initial:
-                a = Metrics[k]['effMetrics']
-                a['model'] = k
-                a['link'] = link
-                MetrData = MetrData.append(a)
-            
-        return MetrData, QpeakAnalysis
+    #         #Converts everything into a DataFrame
+    #         usgs_idx = Metrics[key_base]['qpeakMetrics'].index
+    #         model_idx = Metrics[key_sim]['qpeakMetrics'].index
+    #         shared_idx = model_idx.intersection(usgs_idx)
+    #         Metrics[key_base]['qpeakMetrics'] = Metrics[key_base]['qpeakMetrics'].loc[shared_idx]
+    #         initial = 'usgs'
+    #         QpeakAnalysis = Metrics[key_base]['qpeakMetrics']
+    #         QpeakAnalysis['model'] = key_base
+    #         QpeakAnalysis['link'] = link
+    #         for k in Metrics.keys():
+    #             if k != initial:
+    #                 a = Metrics[k]['qpeakMetrics']
+    #                 a['model'] = k
+    #                 a['link'] = link
+    #                 QpeakAnalysis = QpeakAnalysis.append(a)
+    #         #Converts metrics into a dataFrame
+    #         MetrData = Metrics[key_base]['effMetrics']
+    #         MetrData['model'] = key_base
+    #         MetrData['link'] = link
+    #         for k in Metrics.keys():
+    #             if k != initial:
+    #                 a = Metrics[k]['effMetrics']
+    #                 a['model'] = k
+    #                 a['link'] = link
+    #                 MetrData = MetrData.append(a)
+                
+    #         return MetrData, QpeakAnalysis
 
 
 

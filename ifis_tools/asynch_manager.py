@@ -149,6 +149,7 @@ class hlmModel:
             except:
                 pass
         f.close()
+        return linkList
     
     def write_rainfall(self, date1, date2, path):
         '''Writes binary files for the rainfall of the defined watershed.
