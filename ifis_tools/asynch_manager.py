@@ -590,7 +590,7 @@ class hlm_dat_process:
                         name = find_sim_name(i.split('\\')[1], initial_name)
                     if os.name == 'posix':
                         #Linux
-                        name = find_sim_name(i.split('/')[-1], initial_name)
+                        name = find_sim_name(i.split('/')[1], initial_name)
                     if name == initial_name:
                         dat_names.append(name)
                         dat_paths.append(i)
