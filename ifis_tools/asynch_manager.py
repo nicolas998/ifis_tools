@@ -547,7 +547,7 @@ class hlm_dat_process:
     
     def dat_all2pandas(self, path_in, path_out, sim_name=None, initial_name = '',
         start_year = '2000', start_date = '-04-01 01:00', freq = '1H', stages = 'all', stages_names = None,
-        nickname = None):
+        nickname = None, search = 1):
         '''Takes a list of dat files or a dat file and extracts the simulated streamflow to records
         Parameters:
             - path_in: path with the .dat files, no extension if the user want to process 
@@ -593,30 +593,38 @@ class hlm_dat_process:
             dat_list_raw = glob.glob(path_in + '*.dat')
             dat_list_raw.sort()
             #Finds ths dat files that has the specified name
-            for i in dat_list_raw:
-                try:
-                    if os.name == 'nt':
-                        #Windows
-                        name = find_sim_name(i.split('\\')[-1], initial_name)
-                    if os.name == 'posix':
-                        #Linux
-                        name = find_sim_name(i.split('/')[-1], initial_name)
-                    if name == initial_name:
+            if search == 1:
+                for i in dat_list_raw:
+                    try:
+                        if os.name == 'nt':
+                            #Windows
+                            name = find_sim_name(i.split('\\')[-1], initial_name)
+                        if os.name == 'posix':
+                            #Linux
+                            name = find_sim_name(i.split('/')[-1], initial_name)
+                        if name == initial_name:
+                            dat_names.append(name)
+                            dat_paths.append(i)
+                            dat_years.append(find_year(i.split('/')[-1]))
+                    except OSError as err:
+                        print("OS error: {0}".format(err))
+            elif search == 2:
+                for i in dat_list_raw:
+                    name = i.split('/')[-1]
+                    if name.startswith(initial_name):
                         dat_names.append(name)
                         dat_paths.append(i)
-                        dat_years.append(find_year(i.split('/')[-1]))
-                except OSError as err:
-                    print("OS error: {0}".format(err))
+                        dat_years.append(find_year(i))
         else:
             if os.name == 'nt':
                 dat_names = [path_in.split('\\')[-1].split('.')[0]]
-                try:                
+                try:
                     dat_years = [find_year(path_in).split('\\')[-1].split('.')[0]]
                 except:
                     dat_years = [start_year,]
             elif os.name == 'posix':
                 dat_names = [path_in.split('/')[-1].split('.')[0],]
-                try:                
+                try:
                     dat_years = [find_year(path_in).split('/')[-1].split('.')[0],]
                 except:
                     dat_years = [start_year,]
