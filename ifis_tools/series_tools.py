@@ -25,7 +25,7 @@ import numpy as np
 from multiprocessing import Pool
 import glob
 from scipy.signal import find_peaks as __find_peaks__
-from hydroeval import evaluator, kge
+from hydroeval import evaluator, kge, nse, pbias
 # ## Digital filters
 #
 # Collection of functions to separate runoff from baseflow.
@@ -34,11 +34,11 @@ from hydroeval import evaluator, kge
 
 class performance:
 
-  #Initialization and hide functions
-  def __init__(self, temp_scale = '1H', links_prop = None, 
-      prop_col_names = None, rain_path = None, rain_ending = ''):
-      '''class for the performance analysos of model simulations
-      Params:
+    #Initialization and hide functions
+    def __init__(self, temp_scale = '1H', links_prop = None, 
+        prop_col_names = None, rain_path = None, rain_ending = ''):
+        '''class for the performance analysos of model simulations
+        Params:
         - temp_scale: temporal scale at which the analysis will be done.
         -links_prop: a data frame that must have link_id as index, and columns 
         related with the area and the travel time of the watershed.
@@ -46,251 +46,308 @@ class performance:
         the name for this tool. which are 'area' for the acumulated area and 
         'ttime' for the travel time
         -rain_path: the path to find the mean reainfall series of each watershed
-          This is relevant for the some of the performance metrics, if not given they
-          will be deactivated.
+            This is relevant for the some of the performance metrics, if not given they
+            will be deactivated.
         -rain_ending: the name at the end of the rainfall files (if exist)'''
-      #Define initial things of the class        
-      self.analysis_dic = {}
-      self.base_name = None
-      self.temp_scale = temp_scale
-      self.link_act = None
-      self.tocompare = []
-      #Get link props that is a dataFrame
-      if links_prop is not None:
-        self.link_prop = links_prop
-        self.link_prop = self.link_prop.rename(columns = prop_col_names)[[prop_col_names[k] for k in prop_col_names.keys()]]
-      #Rainfall path 
-      if rain_path is not None:
-        self.update_dic('rain', False, path = rain_path, abr = 'r', file_ending = rain_ending)
-        self.__has_rain__ = True
+        #Define initial things of the class        
+        self.analysis_dic = {}
+        self.base_name = None
+        self.temp_scale = temp_scale
+        self.link_act = None
+        self.tocompare = []
+        #Get link props that is a dataFrame
+        if links_prop is not None:
+            self.link_prop = links_prop
+            self.link_prop = self.link_prop.rename(columns = prop_col_names)[[prop_col_names[k] for k in prop_col_names.keys()]]
+        #Rainfall path 
+        if rain_path is not None:
+            self.update_dic('rain', False, path = rain_path, abr = 'r', file_ending = rain_ending)
+            self.__has_rain__ = True
+        else:
+            self.__has_rain__ = False
   
-  def __mapVar__(self, x, new_min = 0, new_max = 1):
-      '''Function to map any vatriable between a range'''
-      return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min    
+    def __mapVar__(self, x, new_min = 0, new_max = 1):
+        '''Function to map any vatriable between a range'''
+        return ((x-x.min())/(x.max()-x.min()))*(new_max - new_min) + new_min    
 
-  def __intersection__(self, n_list1, n_list2): 
-    '''Get the intersection of two links lists'''
-    lst1 = self.analysis_dic[n_list1]['link_names']
-    lst2 = self.analysis_dic[n_list2]['link_names'] 
-    paths2 = self.analysis_dic[n_list2]['link_paths'] 
-    valueN = []
-    pathsN = []
-    for value,path in zip(lst2, paths2):
-      if value in lst1:
-        valueN.append(value)
-        pathsN.append(path)
-    return valueN, pathsN 
+    def __intersection__(self, n_list1, n_list2): 
+        '''Get the intersection of two links lists'''
+        lst1 = self.analysis_dic[n_list1]['link_names']
+        lst2 = self.analysis_dic[n_list2]['link_names'] 
+        paths2 = self.analysis_dic[n_list2]['link_paths'] 
+        valueN = []
+        pathsN = []
+        for value,path in zip(lst2, paths2):
+            if value in lst1:
+                valueN.append(value)
+                pathsN.append(path)
+        return valueN, pathsN 
 
-  def __path2name__(self, paths):
-    '''Extracts the link numbers from a list of paths.'''
-    names = []
-    for i in paths:
-      j = i.split('/')[-1]
-      names.append(''.join([s for s in j if s.isdigit()]))
-    return names
+    def __path2name__(self, paths):
+        '''Extracts the link numbers from a list of paths.'''
+        names = []
+        for i in paths:
+            j = i.split('/')[-1]
+            names.append(''.join([s for s in j if s.isdigit()]))
+        return names
 
-  def __func_qpeakTimeDiff__(self,qo,qs, ttime = None):
-      '''Calc the time difference between two hydrographs
-      parameters:
-          - qo: observed hydrograph.
-          - qs: simulated hydrograph
-          - ttime: reference time for the hydrograph
-      returns:
-          - dt: delta time difference, 
-              - negative stands for time(sim) > time(obs): late arrival
-              - positibve time(sim) < time(obs): early arrival'''
-      to = qo.idxmax()
-      ts = qs.idxmax()
-      dt = to - ts
-      dt = dt.seconds / 3600.
-      if ttime is not None:
-          dt = dt / ttime
-      if to > ts:
-          return dt*-1
-      else:
-          return dt
+    def __func_qpeakTimeDiff__(self,qo,qs, ttime = None):
+        '''Calc the time difference between two hydrographs
+        parameters:
+            - qo: observed hydrograph.
+            - qs: simulated hydrograph
+            - ttime: reference time for the hydrograph
+        returns:
+            - dt: delta time difference, 
+                - negative stands for time(sim) > time(obs): late arrival
+                - positibve time(sim) < time(obs): early arrival'''
+        to = qo.idxmax()
+        ts = qs.idxmax()
+        dt = to - ts
+        dt = dt.seconds / 3600.
+        if ttime is not None:
+            dt = dt / ttime
+        if to > ts:
+            return dt*-1
+        else:
+            return dt
 
-  def __func_qpeakMagDiff__(self,qo,qs):
-    '''Calc the magnitude difference between two hydrographs'''
-    qmo = qo.max()
-    qms = qs.max()
-    return (qmo - qms) / qmo
+    def __func_qpeakMagDiff__(self,qo,qs):
+        '''Calc the magnitude difference between two hydrographs'''
+        qmo = qo.max()
+        qms = qs.max()
+        return (qmo - qms) / qmo
 
-  def __func_KGE__(self, qo, qs):
-    '''Gets the KGE for an event'''    
-    return evaluator(kge, qs.values, qo.values)[0][0]
+    def __func_KGE__(self, qo, qs):
+        '''Gets the KGE for an event'''    
+        return evaluator(kge, qs.values, qo.values)[0][0]
 
-  def __func_pbias__(self, qo, qs):
-    '''Gets the Percent bias for an event'''    
-    return evaluator(pbias, qs.values, qo.values)[0]
+    def __func_pbias__(self, qo, qs):
+        '''Gets the Percent bias for an event'''    
+        return evaluator(pbias, qs.values, qo.values)[0]
 
-  def __func_nse__(self, qo, qs):
-    '''Gets the Nash for an event'''    
-    return evaluator(nse, qs.values, qo.values)[0]
+    def __func_nse__(self, qo, qs):
+        '''Gets the Nash for an event'''    
+        return evaluator(nse, qs.values, qo.values)[0]
 
-  def __func_qpeakTravelTime__(self, q):
-    ttime = int(self.link_tt)*4
-    dt = pd.Timedelta(str(ttime)+'H')
-    peakMax = q.idxmax()
-    max_r_idx = self.link_r[peakMax-dt:peakMax].idxmax()
-    max_r_val = self.link_r[peakMax-dt:peakMax].max()
-    ttime = peakMax - max_r_idx
-    return max_r_val, ttime.seconds/3600.
+    def __func_qpeakTravelTime__(self, q):
+        ttime = int(self.link_tt)*4
+        dt = pd.Timedelta(str(ttime)+'H')
+        peakMax = q.idxmax()
+        max_r_idx = self.link_r[peakMax-dt:peakMax].idxmax()
+        max_r_val = self.link_r[peakMax-dt:peakMax].max()
+        ttime = peakMax - max_r_idx
+        return max_r_val, ttime.seconds/3600.
 
-  def set_link2analyze(self, link, min4event = 'P90', link_tt = 30.):
-    '''For a link read the data of the different options
-    Parameters:
-      - link: the link to analyze.
-      - min4event: the minim value to consider an event, could be a number or 
-      the percentile (eg P50, P60, P90)
-      - link_tt: traver time of the link is to determine the length of the hydrograph.
-    Returns:
-      - Updates the analysis_dic of the performance class'''
-    self.link_act = link
-    self.link_tt = link_tt
-    for k in self.analysis_dic:
-      pos = self.analysis_dic[k]['link_names'].index(str(link))      
-      try:
-        #reads the data
-        q = pd.read_msgpack(self.analysis_dic[k]['link_paths'][pos])
-        if self.analysis_dic[k]['isDataFrame']:       
-          q = q[self.analysis_dic[k]['DataFrameColumn']]
-        self.analysis_dic[k]['data']['q'] = q.resample(self.temp_scale).mean()
-        self.link_q = q.resample(self.temp_scale).mean()
-        #rainfall data 
-        if self.__has_rain__:
-          self.link_r = pd.read_msgpack(self.analysis_dic['rain']['link_paths'][pos])
-        #Gert the events for the base
-        if k == self.base_name:
-          #Set the type of minimum value
-          if type(min4event) == int or type(min4event) == float:
-            qmin = min4event
-          elif min4event.startswith('P'):
-            per = float(min4event[1:])
-            if per>1.0: per = per/100.
-            min4event = q[q.notnull()].quantile(per)      
-          #Get tyhe events for that station
-          pos,ph = __find_peaks__(q, min4event, distance = link_tt)
-          self.analysis_dic[k]['data']['peaks'] = q.index[pos]
-          self.link_mpeak = ph['peak_heights']
-          self.link_tpeak = q.index[pos]
-      except:
-        #If any error just put nan
-        self.analysis_dic[k]['data']['q'] = np.nan
+    def set_link2analyze(self, link, min4event = 'P90', link_tt = 30.):
+        '''For a link read the data of the different options
+        Parameters:
+        - link: the link to analyze.
+        - min4event: the minim value to consider an event, could be a number or 
+        the percentile (eg P50, P60, P90)
+        - link_tt: traver time of the link is to determine the length of the hydrograph.
+        Returns:
+        - Updates the analysis_dic of the performance class'''
+        self.link_act = link
+        self.link_tt = link_tt
+        for k in self.analysis_dic:
+            pos = self.analysis_dic[k]['link_names'].index(str(link))      
+            #try:
+            #reads the data
+            q = pd.read_msgpack(self.analysis_dic[k]['link_paths'][pos])
+            if self.analysis_dic[k]['isDataFrame']:       
+                q = q[self.analysis_dic[k]['DataFrameColumn']]
+            self.analysis_dic[k]['data']['q'] = q.resample(self.temp_scale).mean()
+            self.link_q = q.resample(self.temp_scale).mean()
+            #rainfall data 
+            if self.__has_rain__:
+                self.link_r = pd.read_msgpack(self.analysis_dic['rain']['link_paths'][pos])
+            #Gert the events for the base
+            if k == self.base_name:
+                #Set the type of minimum value
+                if type(min4event) == int or type(min4event) == float:
+                    qmin = min4event
+                elif min4event.startswith('P'):
+                    per = float(min4event[1:])
+                    if per>1.0: per = per/100.
+                    min4event = q[q.notnull()].quantile(per)      
+                #Get tyhe events for that station
+                pos,ph = __find_peaks__(q, min4event, distance = link_tt)
+                self.analysis_dic[k]['data']['peaks'] = q.index[pos]
+                self.link_mpeak = ph['peak_heights']
+                self.link_tpeak = q.index[pos]
+            #except:
+                #If any error just put nan
+             #   self.analysis_dic[k]['data']['q'] = np.nan
 
-  #Function to update the main analysiis dic.
-  def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = '',
-      isDataFrame = False, DataFrameColumn = ''):
-      '''Creates a dictionary for the performance of the model analysis:
-      Parameters:
-          -name: name to the model run or observed serie.
-          -base: is this an observation or not?.
-          -path: directory with the msgpack series of the links.
-          -abr: small name.
-          -file_ending: text at the end of the files for that run
-          -isDataFrame: if the data came from a data frame.
-          -DataFrameColumn: the name of the column to extract from the data. 
-      Returns (no explicit return):
-          Updates the dictionary with the information for the analysis with
-          series.'''
-      #Defines if it is the base key
-      if base:
-        self.base_name = name
-      else:
-        self.tocompare.append(name)
-      #Get the links and paths to the links of that class
-      links_paths = glob.glob(path+file_ending+'*.msg')
-      links_names = self.__path2name__(links_paths)
-      #Updates the information of the performance dictionary
-      self.analysis_dic.update({
-          name: {'base': base,
-              'path': path,
-              'abr': abr,
-              'file_ending': file_ending,
-              'isDataFrame': isDataFrame,
-              'DataFrameColumn': DataFrameColumn,
-              'link_paths': links_paths,
-              'link_names': links_names,
-              'data':{
-                  'q': None,
-                  'peaks': None
-              }},
-      })
-      #If has the base makes the intersect to hav just the good links
-      if self.base_name is not None and name != self.base_name:
-        # Gets the intersection of the links
-        links_names, links_paths = self.__intersection__(self.base_name, name)
-        self.analysis_dic[name]['link_paths'] = links_paths
-        self.analysis_dic[name]['link_names'] = links_names
-        #Updates the intersection of all the evaluable links
-        self.links_eval = links_names
+    #Function to update the main analysiis dic.
+    def update_dic(self, name, base = False, path = 'not set', abr = 'not set', file_ending = '',
+        path2linkFunc = None, isDataFrame = False, DataFrameColumn = ''):
+        '''Creates a dictionary for the performance of the model analysis:
+        Parameters:
+            -name: name to the model run or observed serie.
+            -base: is this an observation or not?.
+            -path: directory with the msgpack series of the links.
+            -abr: small name.
+            -file_ending: text at the end of the files for that run
+            -path2fileFunc: optinal function to extract the links from the given paths.
+            -isDataFrame: if the data came from a data frame.
+            -DataFrameColumn: the name of the column to extract from the data. 
+        Returns (no explicit return):
+            Updates the dictionary with the information for the analysis with
+            series.'''
+        #Defines if it is the base key
+        if base:
+            self.base_name = name
+        else:
+            self.tocompare.append(name)
+        #Get the links and paths to the links of that class
+        links_paths = glob.glob(path+'.msg')
+        if path2linkFunc is None:
+            links_names = self.__path2name__(links_paths)
+        else:
+            links_names = path2linkFunc(links_paths)
+        #Updates the information of the performance dictionary
+        self.analysis_dic.update({
+            name: {'base': base,
+                'path': path,
+                'abr': abr,
+                'file_ending': file_ending,
+                'isDataFrame': isDataFrame,
+                'DataFrameColumn': DataFrameColumn,
+                'link_paths': links_paths,
+                'link_names': links_names,
+                'data':{
+                    'q': None,
+                    'peaks': None
+                }},
+        })
+        #If has the base makes the intersect to hav just the good links
+        if self.base_name is not None and name != self.base_name:
+            # Gets the intersection of the links
+            links_names, links_paths = self.__intersection__(self.base_name, name)
+            self.analysis_dic[name]['link_paths'] = links_paths
+            self.analysis_dic[name]['link_names'] = links_names
+            #Updates the intersection of all the evaluable links
+            self.links_eval = links_names
 
   #To make ealuations by events
-  def eval_by_events(self, link = None, min4peak = None):
-    '''Get the performance of multiple excecutions for all the events of that link'''
-    
-    if link is not None:
-      args = {'link_tt': self.link_prop['ttime'][int(link)]}
-      if min4peak is not None:
-        args.update({'min4event' : min4peak})
-      
-      self.set_link2analyze(link, **args)
+    def eval_by_events(self, link = None, min4peak = None):
+        '''Get the performance of multiple excecutions for all the events of that link'''
 
-    #Define list to fill 
-    Dates = []
-    Qpeak = []
-    TimePeak = []
-    RainPeak = []
-    QpeakMDiff = []
-    QpeakTDiff = []
-    KGE = []
-    PBIAS = []
-    NASH = []
-    product = []
+        if link is not None:
+            args = {'link_tt': self.link_prop['ttime'][int(link)]}
+            if min4peak is not None:
+                args.update({'min4event' : min4peak})            
+            self.set_link2analyze(link, **args)
 
-    #Iterate in all the models
-    for k in self.analysis_dic.keys():
-      if k != 'rain':
-        #Get data
-        qs = self.analysis_dic[k]['data']['q']
-        qo = self.analysis_dic['usgs']['data']['q']
-        dt = pd.Timedelta(str(self.link_tt)+'H')
+        #Define list to fill 
+        Dates = []
+        Qpeak = []        
+        QpeakMDiff = []
+        QpeakTDiff = []
+        KGE = []
+        PBIAS = []
+        NASH = []
+        product = []
+        if self.__has_rain__:
+            RainPeak = []
+            TimePeak = []
 
-        for date in self.analysis_dic[self.base_name]['data']['peaks']:
-          qot = qo[date-dt:date+dt]
-          qst = qs[date-dt:date+dt]
-          rt = self.link_r[date-dt*4:date+dt]
-          if len(qot)>0 and len(qst)>0 and len(qot) == len(qst) and len(rt)>len(qot):
-            good_o = qot[qot.notnull()].size / qot.size
-            good_s = qst[qst.notnull()].size / qst.size
-            #Only makes the calculus if both series have more than half of their records
-            if good_o > 0.5 and good_s > 0.5:
-              #Good date
-              Dates.append(date)
-              product.append(k)
-              #Get the performance of the qpeak max
-              QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
-              Qpeak.append(np.nanmax(qst))
-              #Time performance            
-              travelDif = self.__func_qpeakTimeDiff__(qot, qst)
-              QpeakTDiff.append(travelDif)
-              #Get the oberved and simulated travel time
-              i_max,tpeak = self.__func_qpeakTravelTime__(qst)
-              TimePeak.append(tpeak)
-              RainPeak.append(i_max)
-              #Overall performance
-              KGE.append(self.__func_KGE__(qot, qst))
-              PBIAS.append(self.__func_pbias__(qot, qst))
-              NASH.append(self.__func_nse__(qot, qst))
+        #Iterate in all the models
+        for k in self.analysis_dic.keys():
+            if k != 'rain':
+                #Get data
+                qs = self.analysis_dic[k]['data']['q']
+                qo = self.analysis_dic['usgs']['data']['q']
+                dt = pd.Timedelta(str(self.link_tt)+'H')
 
-    #Convert to a Data frame with the results.
-    D = pd.DataFrame(np.array([product, Qpeak, RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]).T, 
-          index = Dates, columns = ['product','qpeak','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias'], )
-    convert = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
-      'nse':'float', 'pbias':'float', 'Imax':'float'}
-    D = D.astype(convert)
-    D['link'] = self.link_act
-    return D
+            for date in self.analysis_dic[self.base_name]['data']['peaks']:
+                qot = qo[date-dt:date+dt]
+                qst = qs[date-dt:date+dt]
+                if self.__has_rain__:
+                    rt = self.link_r[date-dt*4:date+dt]
+                if len(qot)>0 and len(qst)>0:
+                    good_o = qot[qot.notnull()].size / qot.size
+                    good_s = qst[qst.notnull()].size / qst.size
+                #Only makes the calculus if both series have more than half of their records
+                if good_o > 0.5 and good_s > 0.5 and len(qot) == len(qst):
+                    #Good date
+                    Dates.append(date)
+                    product.append(k)
+                    #Get the performance of the qpeak max
+                    QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))                    
+                    Qpeak.append(np.nanmax(qst))
+                    #Time performance            
+                    travelDif = self.__func_qpeakTimeDiff__(qot, qst)
+                    QpeakTDiff.append(travelDif)
+                    #Get the oberved and simulated travel time
+                    if self.__has_rain__:
+                        i_max,tpeak = self.__func_qpeakTravelTime__(qst)
+                        TimePeak.append(tpeak)                    
+                        RainPeak.append(i_max)
+                    #Overall performance
+                    KGE.append(self.__func_KGE__(qot, qst))
+                    PBIAS.append(self.__func_pbias__(qot, qst))
+                    NASH.append(self.__func_nse__(qot, qst))
+
+        #Set up to include or not to include rain analysis.
+        if self.__has_rain__:
+            columns = ['product','qpeak','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias']
+            ListProducts = [product, Qpeak, RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]
+            formats = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
+                'nse':'float', 'pbias':'float', 'Imax':'float'}
+        else:
+            columns = ['product','qpeak','qpeakDiff','tpeakDiff','kge','nse', 'pbias']
+            ListProducts = [product, Qpeak, QpeakMDiff, QpeakTDiff, KGE, NASH, PBIAS]
+            formats = {'qpeak':'float','qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
+                'nse':'float', 'pbias':'float'}
+        #Convert to a Data frame with the results.
+        D = pd.DataFrame(np.array(ListProducts).T, index = Dates, columns = columns, )
+        D = D.astype(formats)
+        D['link'] = self.link_act
+        return D
+
+    def eval_years(self, link = None, usgs = None):
+        '''Eval the performance of the model results for every year'''
+        
+        if link is not None:
+            self.set_link2analyze(link)
+        
+        Vol = []
+        KGE = []
+        NSE = []
+        Years = []
+        Product = []        
+        for k in self.analysis_dic.keys():                    
+            qs = self.analysis_dic[k]['data']['q']
+            qo = self.analysis_dic['usgs']['data']['q']
+            
+            idx = qo.index.intersection(qs.index)
+            qot = qo[idx]
+            qst = qs[idx]
+            qA = qot.resample('A').mean()
+            for y in qA.index.year.values:    
+                #Position of the numeric values
+                p = np.where((np.isnan(qot[str(y)]) == False) & (np.isnan(qst[str(y)]) == False))[0]
+                #Performance
+                KGE.append(self.__func_KGE__(qot[str(y)][p],qst[str(y)][p]))
+                NSE.append(self.__func_nse__(qot[str(y)][p],qst[str(y)][p]))
+                Vol.append(qst[str(y)][p].sum() / qot[str(y)][p].sum() )
+                #Add the year
+                Years.append(y)
+                Product.append(k)
+        
+        #Convert to a Data frame with the results.
+        ListProducts = [Product, KGE, NSE, Vol]
+        columns = ['product','kge','nse','vol']
+        formats = {'kge':'float', 'nse':'float','vol':'float'}
+        D = pd.DataFrame(np.array(ListProducts).T, index = Years, columns = columns, )
+        D = D.astype(formats)
+        D['link'] = self.link_act
+        if usgs is not None:
+            D['usgs'] = usgs
+        return D
 
     # class performance:
 
