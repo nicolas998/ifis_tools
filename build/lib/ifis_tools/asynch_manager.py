@@ -98,25 +98,35 @@ def UpdateGlobal(filename, DictUpdates):
 
 class hlmModel:
 
-    def __init__(self,linkid=None, path = None, ExtraParams = None, model_uid = 604):
+    def __init__(self,linkid=None, path = None, ExtraParams = None, model_uid = 604,
+        build_rvr = True):
         '''Depending on the linkid or in the path the class starts a table
         to set up a new project fro HLM model.
             - linkid = number of link id to search for in the database.
             - path =  path to search for a WMF.SimuBasin project .nc
+            - ExtraParams: name of external params stored in the dataBase.
+            - model_uid: the id of the model at the global.
+            - build_rvr: if there is going to be an rvr or already exists.
         Optional:
             -ExtraParams: List with the names of the extra params extracted from the database'''
         #Type of model to be used 
         self.model_uid = model_uid
         #Make an action depending on each case.
-        if linkid is not None and path is None:
-            self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams)
-            self.linkid = linkid
-        elif path is not None and linkid is None:
-            self.wmfBasin = wmf.SimuBasin(rute=path)
-            self.wmfBasin.GetGeo_Cell_Basics()
-            self.Table = cu.Transform_Basin2Asnych('/tmp/tmp.rvr',
-                lookup='/tmp/tmp.look',
-                prm='/tmp/tmp.prm')
+        if build_rvr:
+            if linkid is not None and path is None:
+                self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams)
+                self.linkid = linkid
+            elif path is not None and linkid is None:
+                self.wmfBasin = wmf.SimuBasin(rute=path)
+                self.wmfBasin.GetGeo_Cell_Basics()
+                self.Table = cu.Transform_Basin2Asnych('/tmp/tmp.rvr',
+                    lookup='/tmp/tmp.look',
+                    prm='/tmp/tmp.prm')
+            self.build_rvr = True
+        else:
+            self.build_rvr = False
+        
+
 
     def write_control(self, path , linkList = None):
         '''Writes the control.sav file used by the model to determine at which links store the
@@ -537,7 +547,7 @@ class hlm_dat_process:
     
     def dat_all2pandas(self, path_in, path_out, sim_name=None, initial_name = '',
         start_year = '2000', start_date = '-04-01 01:00', freq = '1H', stages = 'all', stages_names = None,
-        nickname = None):
+        nickname = None, search = 1):
         '''Takes a list of dat files or a dat file and extracts the simulated streamflow to records
         Parameters:
             - path_in: path with the .dat files, no extension if the user want to process 
@@ -583,30 +593,38 @@ class hlm_dat_process:
             dat_list_raw = glob.glob(path_in + '*.dat')
             dat_list_raw.sort()
             #Finds ths dat files that has the specified name
-            for i in dat_list_raw:
-                try:
-                    if os.name == 'nt':
-                        #Windows
-                        name = find_sim_name(i.split('\\')[1], initial_name)
-                    if os.name == 'posix':
-                        #Linux
-                        name = find_sim_name(i.split('/')[-1], initial_name)
-                    if name == initial_name:
+            if search == 1:
+                for i in dat_list_raw:
+                    try:
+                        if os.name == 'nt':
+                            #Windows
+                            name = find_sim_name(i.split('\\')[-1], initial_name)
+                        if os.name == 'posix':
+                            #Linux
+                            name = find_sim_name(i.split('/')[-1], initial_name)
+                        if name == initial_name:
+                            dat_names.append(name)
+                            dat_paths.append(i)
+                            dat_years.append(find_year(i.split('/')[-1]))
+                    except OSError as err:
+                        print("OS error: {0}".format(err))
+            elif search == 2:
+                for i in dat_list_raw:
+                    name = i.split('/')[-1]
+                    if name.startswith(initial_name):
                         dat_names.append(name)
                         dat_paths.append(i)
-                        dat_years.append(find_year(i.split('/')[-1]))
-                except OSError as err:
-                    print("OS error: {0}".format(err))
+                        dat_years.append(find_year(i))
         else:
             if os.name == 'nt':
                 dat_names = [path_in.split('\\')[-1].split('.')[0]]
-                try:                
+                try:
                     dat_years = [find_year(path_in).split('\\')[-1].split('.')[0]]
                 except:
                     dat_years = [start_year,]
             elif os.name == 'posix':
                 dat_names = [path_in.split('/')[-1].split('.')[0],]
-                try:                
+                try:
                     dat_years = [find_year(path_in).split('/')[-1].split('.')[0],]
                 except:
                     dat_years = [start_year,]
@@ -617,6 +635,7 @@ class hlm_dat_process:
             display(f1)
         #Goes for every year
         first = True
+        DicLinkBad = {}
         for path,name,year in zip(dat_paths, dat_names, dat_years):
             #Reads the dat file 
             self.read_dat_file(path)
@@ -624,26 +643,32 @@ class hlm_dat_process:
             if nickname is not None:
                 name = nickname
             #Process each link
+            BadLinks = []
             for link in self.links:
                 #extract the info from the dat file
-                if stages is 'all':
-                    q = self.dat_record2pandas(link, str(year)+start_date, freq)
-                else:
-                    q = self.dat_record2pandas(link, str(year)+start_date, freq)[stages]
-                #Change column names 
-                if type(stages_names) == list:
-                    for i,j in zip(q.columns.values.tolist(),stages_names):
-                        q = q.rename(columns={i:j})
-                #Writes the maskpack
-                if first:
-                    q.to_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
-                else:
-                    q_old = pd.read_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
-                    qtot = q_old.append(q)
-                    qtot.to_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
+                try:
+                  if stages is 'all':
+                      q = self.dat_record2pandas(link, str(year)+start_date, freq)
+                  else:
+                      q = self.dat_record2pandas(link, str(year)+start_date, freq)[stages]
+                  #Change column names 
+                  if type(stages_names) == list:
+                      for i,j in zip(q.columns.values.tolist(),stages_names):
+                          q = q.rename(columns={i:j})
+                  #Writes the maskpack
+                  if first:
+                      q.to_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
+                  else:
+                      q_old = pd.read_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
+                      qtot = q_old.append(q)
+                      qtot.to_msgpack(path_out+str(link)+'_'+name+'_'+end_name+'.msg')
+                except:
+                  BadLinks.append(link)  
+            DicLinkBad.update({str(year): BadLinks})
             if floatBar:
                 f1.value+=1
             first = False
+        self.BadLinks = DicLinkBad
 
 # ## Asynch project manager
 

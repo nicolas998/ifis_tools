@@ -14,7 +14,7 @@ colors = {
 }
 
 def PlotSeries(Data, date_s, date_e, xname = 'Streamflow [m3 s-1]', 
-  yname = 'Time [h]'):
+  yname = 'Time [h]', width = 700, height = 400):
     
     fig = go.Figure()
 
@@ -37,6 +37,14 @@ def PlotSeries(Data, date_s, date_e, xname = 'Streamflow [m3 s-1]',
             ))
        
     fig.update_layout(
+        width = width,
+        height = height,
+        margin = go.layout.Margin(
+            l = 50,
+            r = 20,
+            b = 50,
+            t = 20
+        ),
         xaxis_range=[date_s, date_e],
         xaxis_title = xname,
         yaxis_title = yname,

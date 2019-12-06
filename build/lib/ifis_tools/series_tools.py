@@ -32,6 +32,28 @@ from hydroeval import evaluator, kge, nse, pbias
 
 # +
 
+def percentiles(obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
+    '''Obtains the percentile for the sim value that corresponds to
+    an oberved value.
+    Parameters:
+        -obs: observed peaks or time serie.
+        -sim: simulated peaks or time serie.
+        -steps: number of splits to estimate the percentile.
+        -perc: percentile to estimate
+        -percMax: Max value to divide the observations.
+    Returns:
+        -A vector (2,N) where the first row corresponds to the percentiles
+        at the observation and the second to the percentiles at the simulation'''
+    if bins is None:
+        bins = np.linspace(obs.min(), np.percentile(obs, percMax), steps)
+    X = []; Y = []
+    for i,j in zip(bins[:-1], bins[1:]):
+        Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
+        X.append((i+j)/2.)
+        #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
+    return np.vstack([X,Y])
+
+
 class performance:
 
     #Initialization and hide functions
@@ -340,7 +362,7 @@ class performance:
         
         #Convert to a Data frame with the results.
         ListProducts = [Product, KGE, NSE, Vol]
-        columns = ['prodcut','kge','nse','vol']
+        columns = ['product','kge','nse','vol']
         formats = {'kge':'float', 'nse':'float','vol':'float'}
         D = pd.DataFrame(np.array(ListProducts).T, index = Years, columns = columns, )
         D = D.astype(formats)
