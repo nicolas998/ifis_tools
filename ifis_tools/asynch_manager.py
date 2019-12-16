@@ -567,7 +567,8 @@ class hlm_dat_process:
             - stages_names: names to put in the DataFrame for each column
             - nickname: name to put to the output files instead of the sim_name.
         Results:
-            - Writes an msgpack with pandas Series item for each link in the dat system'''
+            - Writes an msgpack with pandas Series item for each link in the dat system
+            -search: (1) search the old way (2) does in the new way'''
         #In functions
         def find_sim_name(dat_name, sim_name):
             '''Fuinds the name of a dat_name extracted from the .dat file'''
