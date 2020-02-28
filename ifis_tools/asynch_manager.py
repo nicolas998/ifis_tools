@@ -408,11 +408,7 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         else:
             Groups = int(nCores / 2)
         #Define the header text.
-        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe '+str(Groups)+'cpn '+str(nCores)+'\n####$ -l mf=16G\n#$ -q IFC\n\n\
-/bin/echo Running on host: `hostname`.\n\
-/bin/echo In directory: `pwd`\n\
-/bin/echo Starting on: `date`\n']
-
+        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe smp '+str(nCores)+'\n####$ -l mf=16G\n#$ -q IFC\n\n/bin/echo Running on host: `hostname`.\n/bin/echo In directory: `pwd`\n/bin/echo Starting on: `date`\n']
         f = open(path,'w',  newline='\n')
         f.write(L[0])
         f.write('\n')
