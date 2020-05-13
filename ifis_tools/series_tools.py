@@ -22,6 +22,7 @@
 
 import pandas as pd 
 import numpy as np 
+from scipy import stats as sta
 from multiprocessing import Pool
 import glob
 from scipy.signal import find_peaks as __find_peaks__
@@ -160,6 +161,20 @@ class performance:
         '''Gets the KGE for an event'''
         return evaluator(kge, qs.values, qo.values)[0][0]
 
+    def __func_KGE_mean__(self, qo,qs):
+        '''Gets the mean ratio difference of the KGE'''
+        qo.dropna(inplace = True)
+        qs.dropna(inplace = True)
+        idx = qo.index.intersection(qs.index)
+        return qs.loc[idx].mean() / qo.loc[idx].mean()
+
+    def __func_KGE_std__(self, qo,qs):
+        '''Gets the std ratio of the KGE'''
+        qo.dropna(inplace = True)
+        qs.dropna(inplace = True)
+        idx = qo.index.intersection(qs.index)
+        return qs.loc[idx].std() / qo.loc[idx].std()
+
     def __func_pbias__(self, qo, qs):
         '''Gets the Percent bias for an event'''
         return evaluator(pbias, qs.values, qo.values)[0] * (-1)
@@ -176,6 +191,26 @@ class performance:
         max_r_val = self.link_r[peakMax-dt:peakMax].max()
         ttime = peakMax - max_r_idx
         return max_r_val, ttime.seconds/3600.
+
+    def __func_find_max_corr(self, qo,qs,w = 100):
+        #Get only the data that is not nan
+        qo.dropna(inplace=True)
+        qs.dropna(inplace=True)
+        idx = qo.index.intersection(qs.index)
+        qo = qo[idx]
+        qs = qs[idx]
+        #find the best correlation 
+        bestCorr = -9999
+        bestMove = -9999
+        for move in np.arange(-w+1,w):
+            ct = sta.pearsonr(qo.values[w:-w],qs.values[w+move:-w+move])[0]
+            if ct > bestCorr:
+                bestCorr = ct
+                bestMove = move
+            if move == 0:
+                zeroCorr = ct
+        return bestCorr, zeroCorr, bestMove
+
 
     def set_link2analyze(self, link, min4event = 'P90', link_tt = 30.):
         '''For a link read the data of the different options
@@ -276,12 +311,12 @@ class performance:
         if link is not None:
             args = {'link_tt': self.link_prop['ttime'][int(link)]}
             if min4peak is not None:
-                args.update({'min4event' : min4peak})            
+                args.update({'min4event' : min4peak})
             self.set_link2analyze(link, **args)
 
         #Define list to fill 
         Dates = []
-        Qpeak = []        
+        Qpeak = []
         QpeakMDiff = []
         QpeakTDiff = []
         KGE = []
@@ -331,13 +366,18 @@ class performance:
 
         #Set up to include or not to include rain analysis.
         if self.__has_rain__:
-            columns = ['product','qpeak','Imax','qpeakDiff','tpeak','tpeakDiff','kge','nse', 'pbias']
-            ListProducts = [product, Qpeak, RainPeak, QpeakMDiff, TimePeak,QpeakTDiff, KGE, NASH, PBIAS]
+            columns = ['product','qpeak','Imax','qpeakDiff',
+                       'tpeak','tpeakDiff','kge','nse', 'pbias']
+            ListProducts = [product, Qpeak, RainPeak, QpeakMDiff,
+                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS]
             formats = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
                 'nse':'float', 'pbias':'float', 'Imax':'float'}
         else:
-            columns = ['product','qpeak','qpeakDiff','tpeakDiff','kge','nse', 'pbias']
-            ListProducts = [product, Qpeak, QpeakMDiff, QpeakTDiff, KGE, NASH, PBIAS]
+            columns = ['product','qpeak','qpeakDiff',
+                       'tpeakDiff','kge','nse', 'pbias',
+                      'Cpear','Bpear','MBpear']
+            ListProducts = [product, Qpeak, QpeakMDiff,
+                            QpeakTDiff, KGE, NASH, PBIAS]
             formats = {'qpeak':'float','qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
                 'nse':'float', 'pbias':'float'}
         #Convert to a Data frame with the results.
@@ -346,7 +386,8 @@ class performance:
         D['link'] = self.link_act
         return D
 
-    def eval_years(self, link = None, usgs = None, fi = '', flood = None, Pflood = 96):
+    def eval_years(self, link = None, usgs = None, fi = '',
+                   flood = None, Pflood = 96, window = 100):
         '''Eval the performance of the model results for every year'''
 
         if link is not None:
@@ -362,6 +403,11 @@ class performance:
         QP = []
         Years = []
         Product = []
+        bestCorr = []
+        zeroCorr = []
+        bestMove = []
+        meanRatio = []
+        stdRatio = []
         for k in self.analysis_dic.keys():
             qs = self.analysis_dic[k]['data']['q']
             qo = self.analysis_dic['usgs']['data']['q']
@@ -383,6 +429,14 @@ class performance:
                 Pbias.append(self.__func_pbias__(qot[str(y)][p],qst[str(y)][p]))
                 Hits.append(self.__func_HyM__(qot[str(y)][p],qst[str(y)][p],flood))
                 PD.append(self.__func_qpeakMagDiff2(qot[str(y)][p],qst[str(y)][p]))
+                #Mean sn std ratios
+                meanRatio.append(self.__func_KGE_mean__(qot[str(y)],qst[str(y)]))
+                stdRatio.append(self.__func_KGE_std__(qot[str(y)],qst[str(y)]))
+                #Best correlation and correlatoin
+                beCorr, zeCorr, beMove = self.__func_find_max_corr(qo[str(y)],qs[str(y)],window)
+                bestCorr.append(beCorr)
+                zeroCorr.append(zeCorr)
+                bestMove.append(beMove)
                 #Prop
                 Vol.append(qst[str(y)][p].sum())
                 QP.append(qst[str(y)][p].max())
@@ -391,10 +445,16 @@ class performance:
                 Product.append(k)
 
         #Convert to a Data frame with the results.
-        ListProducts = [Product, KGE, NSE, Vol, Pbias, Hits, PD, QP]
-        columns = ['product','kge','nse','vol','pbias', 'Hits', 'PeakDif','Qpeak']
+        ListProducts = [Product, KGE, NSE, Vol, Pbias, Hits, PD, QP,
+                       zeroCorr, bestCorr, bestMove, meanRatio,
+                       stdRatio]
+        columns = ['product','kge','nse','vol','pbias', 'Hits',
+                   'PeakDif','Qpeak',
+                  'corr','best_corr','moves','meanRatio','stdRatio']
         formats = {'kge':'float', 'nse':'float','vol':'float','pbias':'float',
-                   'Hits':'float', 'PeakDif':'float','Qpeak':'float'}
+                   'Hits':'float', 'PeakDif':'float','Qpeak':'float',
+                  'corr':'float','best_corr':'float','moves':'int',
+                   'meanRatio':'float','stdRatio':'float'}
         D = pd.DataFrame(np.array(ListProducts).T, index = Years, columns = columns, )
         D = D.astype(formats)
         D['Misses'] = 1 - D['Hits']
