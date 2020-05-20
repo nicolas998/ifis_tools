@@ -202,6 +202,7 @@ class performance:
         #find the best correlation 
         bestCorr = -9999
         bestMove = -9999
+        zeroCorr = 0.0
         for move in np.arange(-w+1,w):
             ct = sta.pearsonr(qo.values[w:-w],qs.values[w+move:-w+move])[0]
             if ct > bestCorr:
@@ -374,8 +375,7 @@ class performance:
                 'nse':'float', 'pbias':'float', 'Imax':'float'}
         else:
             columns = ['product','qpeak','qpeakDiff',
-                       'tpeakDiff','kge','nse', 'pbias',
-                      'Cpear','Bpear','MBpear']
+                       'tpeakDiff','kge','nse', 'pbias']
             ListProducts = [product, Qpeak, QpeakMDiff,
                             QpeakTDiff, KGE, NASH, PBIAS]
             formats = {'qpeak':'float','qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
@@ -433,10 +433,15 @@ class performance:
                 meanRatio.append(self.__func_KGE_mean__(qot[str(y)],qst[str(y)]))
                 stdRatio.append(self.__func_KGE_std__(qot[str(y)],qst[str(y)]))
                 #Best correlation and correlatoin
-                beCorr, zeCorr, beMove = self.__func_find_max_corr(qo[str(y)],qs[str(y)],window)
-                bestCorr.append(beCorr)
-                zeroCorr.append(zeCorr)
-                bestMove.append(beMove)
+                try:
+                    beCorr, zeCorr, beMove = self.__func_find_max_corr(qo[str(y)],qs[str(y)],window)
+                    bestCorr.append(beCorr)
+                    zeroCorr.append(zeCorr)
+                    bestMove.append(beMove)
+                except:
+                    bestCorr.append(0.0)
+                    zeroCorr.append(0.0)
+                    bestMove.append(0)
                 #Prop
                 Vol.append(qst[str(y)][p].sum())
                 QP.append(qst[str(y)][p].max())
