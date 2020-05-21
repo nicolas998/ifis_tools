@@ -333,7 +333,7 @@ class performance:
             if k != 'rain':
                 #Get data
                 qs = self.analysis_dic[k]['data']['q']
-                qo = self.analysis_dic['usgs']['data']['q']
+                qo = self.analysis_dic[self.base_name]['data']['q']
                 dt = pd.Timedelta(str(self.link_tt)+'H')
 
             for date in self.analysis_dic[self.base_name]['data']['peaks']:
@@ -410,7 +410,7 @@ class performance:
         stdRatio = []
         for k in self.analysis_dic.keys():
             qs = self.analysis_dic[k]['data']['q']
-            qo = self.analysis_dic['usgs']['data']['q']
+            qo = self.analysis_dic[self.base_name]['data']['q']
 
             idx = qo.index.intersection(qs.index)
             qot = qo[idx]
