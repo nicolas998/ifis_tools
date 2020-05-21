@@ -314,6 +314,7 @@ class performance:
             if min4peak is not None:
                 args.update({'min4event' : min4peak})
             self.set_link2analyze(link, **args)
+        area_link = self.link_prop.loc[float(link),'area'] / 1e6
 
         #Define list to fill 
         Dates = []
@@ -327,6 +328,8 @@ class performance:
         if self.__has_rain__:
             RainPeak = []
             TimePeak = []
+        Qmean = []
+        Area = []
 
         #Iterate in all the models
         for k in self.analysis_dic.keys():
@@ -335,6 +338,7 @@ class performance:
                 qs = self.analysis_dic[k]['data']['q']
                 qo = self.analysis_dic[self.base_name]['data']['q']
                 dt = pd.Timedelta(str(self.link_tt)+'H')
+                qmean = qs.mean()
 
             for date in self.analysis_dic[self.base_name]['data']['peaks']:
                 qot = qo[date-dt:date+dt]
@@ -349,6 +353,8 @@ class performance:
                     #Good date
                     Dates.append(date)
                     product.append(k)
+                    Qmean.append(qmean)
+                    Area.append(area_link)
                     #Get the performance of the qpeak max
                     QpeakMDiff.append(self.__func_qpeakMagDiff__(qot,qst))
                     Qpeak.append(np.nanmax(qst))
@@ -367,19 +373,21 @@ class performance:
 
         #Set up to include or not to include rain analysis.
         if self.__has_rain__:
-            columns = ['product','qpeak','Imax','qpeakDiff',
-                       'tpeak','tpeakDiff','kge','nse', 'pbias']
-            ListProducts = [product, Qpeak, RainPeak, QpeakMDiff,
-                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS]
+            columns = ['product','qpeak','qmean','Imax','qpeakDiff',
+                       'tpeak','tpeakDiff','kge','nse', 'pbias','up_area']
+            ListProducts = [product, Qpeak, Qmean,RainPeak, QpeakMDiff,
+                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS, Area]
             formats = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
-                'nse':'float', 'pbias':'float', 'Imax':'float'}
+                       'nse':'float', 'pbias':'float',
+                       'Imax':'float','qmean':'float', 'up_area':'float'}
         else:
-            columns = ['product','qpeak','qpeakDiff',
-                       'tpeakDiff','kge','nse', 'pbias']
-            ListProducts = [product, Qpeak, QpeakMDiff,
-                            QpeakTDiff, KGE, NASH, PBIAS]
+            columns = ['product','qpeak','qmean','qpeakDiff',
+                       'tpeakDiff','kge','nse', 'pbias','up_area']
+            ListProducts = [product, Qpeak, Qmean,QpeakMDiff,
+                            QpeakTDiff, KGE, NASH, PBIAS, Area]
             formats = {'qpeak':'float','qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
-                'nse':'float', 'pbias':'float'}
+                       'nse':'float',
+                       'pbias':'float','qmean':'float','up_area':'float'}
         #Convert to a Data frame with the results.
         D = pd.DataFrame(np.array(ListProducts).T, index = Dates, columns = columns, )
         D = D.astype(formats)
