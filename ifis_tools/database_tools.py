@@ -82,12 +82,15 @@ def SQL_read_USGS_Streamflow(usgs_id, date1, date2, schema = 'pers_nico',
     con.close()
     return Data
 
-def WEB_Get_USGS(usgs_code, date1, date2):
+def WEB_Get_USGS(usgs_code, date1, date2, variable = '00060'):
     '''Get USGS data from the web using the climdata interface
     Parameters (debe ser probado):
         - usgs_code: the code of the station to obtain.
         - date1: initial date.
-        - date2: final date.'''
+        - date2: final date.
+        - variable: 
+            - 00060 for streamflow.
+            - 00065 for height'''
     #Get the data form the web 
     data = InstantValueIO(
         start_date = pd.Timestamp(date1),
