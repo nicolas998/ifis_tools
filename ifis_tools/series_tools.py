@@ -22,6 +22,7 @@
 
 import pandas as pd 
 import numpy as np 
+import read_dat as rd
 from scipy import stats as sta
 from multiprocessing import Pool
 import glob
