@@ -55,7 +55,7 @@ def percentiles(obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
         #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
     return np.vstack([X,Y])
 
-def read_data(path, date_start,state = 0, freq = '60min'):
+def read_dat(path, date_start,state = 0, freq = '60min'):
     '''Read fast a .dat file produced by HLM and returns a pandas DataFrame
     Parameters:
         -path: path to the .dat file.
