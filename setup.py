@@ -8,7 +8,7 @@ ext = Extension(name='read_dat', sources = ['ifis_tools/read_dat.f90'])
 
 setup(
     name='ifis_tools',
-    version='0.2.3',
+    version='0.3.0',
     author='Nicolas Velasquez G',
     author_email='nicolas.velasquezgiron@gmail.com',    
     packages=['ifis_tools'],

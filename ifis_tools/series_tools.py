@@ -22,7 +22,7 @@
 
 import pandas as pd 
 import numpy as np 
-import read_dat as rd
+from read_dat import *
 from scipy import stats as sta
 from multiprocessing import Pool
 import glob
@@ -54,6 +54,19 @@ def percentiles(obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
         X.append((i+j)/2.)
         #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
     return np.vstack([X,Y])
+
+def read_data(path, date_start,state = 0, freq = '60min'):
+    '''Read fast a .dat file produced by HLM and returns a pandas DataFrame
+    Parameters:
+        -path: path to the .dat file.
+        -date_start: starting date of the simulation
+        -State: model state.
+        -freq: Time step of the .dat given in min (ej. 60min).'''
+    Ncon, Nrec,Nstat = read_dat.get_size(path)
+    cont, data = read_dat.get_data(path, Ncon, Nrec, Nstat)
+    dates = pd.date_range(date_start, periods=Nrec, freq=freq)
+    
+    return pd.DataFrame(data[:,state,:].T, index=dates, columns=cont)
 
 
 class performance:
