@@ -194,11 +194,17 @@ class performance:
 
     def __func_pbias__(self, qo, qs):
         '''Gets the Percent bias for an event'''
-        return evaluator(pbias, qs.values, qo.values)[0] * (-1)
+        try:
+            return evaluator(pbias, qs.values, qo.values)[0] * (-1)
+        except:
+            return evaluator(pbias, qs, qo)[0] * (-1)
 
     def __func_nse__(self, qo, qs):
         '''Gets the Nash for an event'''
-        return evaluator(nse, qs.values, qo.values)[0]
+        try:
+            return evaluator(nse, qs.values, qo.values)[0]
+        except:
+            return evaluator(nse, qs, qo)[0]
 
     def __func_qpeakTravelTime__(self, q):
         ttime = int(self.link_tt)*4
