@@ -173,7 +173,10 @@ class performance:
 
     def __func_KGE__(self, qo, qs):
         '''Gets the KGE for an event'''
-        return evaluator(kge, qs.values, qo.values)[0][0]
+        try:
+            return evaluator(kge, qs.values, qo.values)[0][0]
+        except:
+            return evaluator(kge, qs, qo)[0][0]
 
     def __func_KGE_mean__(self, qo,qs):
         '''Gets the mean ratio difference of the KGE'''
