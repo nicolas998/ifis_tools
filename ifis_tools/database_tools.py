@@ -91,19 +91,23 @@ def WEB_Get_USGS(usgs_code, date1, date2, variable = '00060'):
         - variable: 
             - 00060 for streamflow.
             - 00065 for height'''
-    #Get the data form the web 
+    #Get the data form the web     
+    if variable =='00060':
+        convert = 0.02832
+    else:
+        convert = 1
     data = InstantValueIO(
         start_date = pd.Timestamp(date1),
         end_date = pd.Timestamp(date2),
         station = usgs_code,
-        parameter = "00060")
+        parameter = variable)
     try:
         #Convert the data into a pandas series 
         for series in data:
             flow = [r[0] for r in series.data]
             dates = [r[1] for r in series.data]
         #Obtain the series of pandas
-        Q = pd.Series(flow, pd.to_datetime(dates, utc=True)) * 0.02832
+        Q = pd.Series(flow, pd.to_datetime(dates, utc=True)) * convert
         Index = [d.replace(tzinfo = None) for d in Q.index]
         Q.index = Index
     except:
@@ -112,7 +116,7 @@ def WEB_Get_USGS(usgs_code, date1, date2, variable = '00060'):
             flow = [r[1] for r in series.data]
             dates = [r[0] for r in series.data]
         #Obtain the series of pandas
-        Q = pd.Series(flow, pd.to_datetime(dates, utc=True)) * 0.02832
+        Q = pd.Series(flow, pd.to_datetime(dates, utc=True)) * convert
         Index = [d.replace(tzinfo = None) for d in Q.index]
         Q.index = Index
     return Q
