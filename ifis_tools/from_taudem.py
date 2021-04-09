@@ -3,6 +3,7 @@ import geopandas as gp
 import numpy as np 
 import pylab as pl 
 from struct import pack, unpack
+import io
 import gdal
 from osgeo import ogr
 import osgeo
