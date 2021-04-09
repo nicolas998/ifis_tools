@@ -45,7 +45,7 @@ def read_raster(path_map,isDEMorDIR=False,dxp=None, noDataP = None,isDIR = False
     Mapa=direction.ReadAsArray()
     direction.FlushCache()
     del direction
-    return Mapa.T.astype(float),[ncols,nrows,xll,yll,dx,dy,noData],EPSG_code
+    return Mapa.astype(float),[ncols,nrows,xll,yll,dx,dy,noData],EPSG_code
 
 def save_array2raster(Array, ArrayProp, path, EPSG = 4326, Format = 'GTiff'):
     dst_filename = path
@@ -120,15 +120,63 @@ def rainfall_raster_ranks(path_rain_frame, path_ranks):
     gdal.Polygonize( srcband, None, dst_layer, -1, [], callback=None )
     dst_ds.Destroy()
 
+def saveBin(lid, lid_vals, count, fn):
+    io_buffer_size = 4+4*100000
+    if count > 0:
+        lid = (lid[lid_vals > 1])
+        lid_vals = (lid_vals[lid_vals > 1])
+    fh = io.open(fn, 'wb', io_buffer_size)
+    fh.write(pack('<I', count))
+    for vals in zip(lid, lid_vals):
+        fh.write(pack('<If', *vals))
+    fh.close()
+
 class network:
     
     def __init__(self, path_or_geo):
         if type(path_or_geo) is str:
             self.network = gp.read_file(path_or_geo)
+            self.network['link'] = self.network['LINKNO']
             self.network.set_index('LINKNO', inplace=True)
             self.network['AREA'] = (self.network['DSContArea'] - self.network['USContArea']) / 1e6
+            self.network_centroids = None
+            self.network_ranks = None
         elif type(path_or_geo) is gp.geodataframe.GeoDataFrame:
             self.network = path_or_geo.copy()
+        
+    
+    def network2points(self):
+        '''Converts the network elements to centroids, ideal to get the 
+        rainfall ranks references'''
+        x =[]
+        y = []
+        for link in self.network.index:
+            geo = self.network.loc[link, 'geometry']
+            x.append(geo.centroid.x)
+            y.append(geo.centroid.y)
+        net_centroids = gp.GeoDataFrame(self.network[['link','strmOrder']], geometry = gp.points_from_xy(x, y),
+                                crs = self.network.crs)
+        self.network_centroids = net_centroids
+        print('Centroids had been saved under self.network_centroids')
+        #return net_centroids
+    
+    def get_rainfall_lookup(self, path_rain_ranks):
+        '''Generates the lookup table between the links and a rainfall that is going to be used
+        the rain ranks must be the one obtained with *rainfall_raster_ranks*. By now this operation
+        is done one to one.'''
+        # Reads the rainfall ranks and project it
+        rain_ranks = gp.read_file(path_rain_ranks)
+        rain_ranks = rain_ranks.to_crs(self.network.crs)
+        print('1. rain ranks readed and projected to the current crs')
+        # Checks if centroids are already defined
+        if self.network_centroids is None:
+            print('2. Network points not defined, defining them...')
+            self.network2points()
+        print('3. Network points defined')    
+        # Performs the spatial join
+        points_ranked = gp.sjoin(self.network_centroids, rain_ranks, how = 'left', op = 'within')
+        self.rain_ranks = points_ranked
+        print('4. ranks obtained results stored in self.rain_ranks')
     
     def write_rvr(self, path, sub_net = None):
         '''Writes and rvr file based on a network extracted from the base network'''
