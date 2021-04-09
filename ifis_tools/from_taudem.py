@@ -182,7 +182,7 @@ class network:
         '''Converts a grid (tif) file of rainfall to the shape of the network 
         using the lookup table obtained by *get_rainfall_lookup*'''
         #Read and transform rainfall to its ranks
-        rain, p, ep = ft.read_raster(path_rain)
+        rain, p, ep = read_raster(path_rain)
         rain = rain.T
         rain = rain.reshape(rain.size)
         #Put the rinfall in links 
