@@ -45,7 +45,7 @@ def read_raster(path_map,isDEMorDIR=False,dxp=None, noDataP = None,isDIR = False
     Mapa=direction.ReadAsArray()
     direction.FlushCache()
     del direction
-    return Mapa.astype(float),[ncols,nrows,xll,yll,dx,dy,noData],EPSG_code
+    return Mapa.T.astype(float),[ncols,nrows,xll,yll,dx,dy,noData],EPSG_code
 
 def save_array2raster(Array, ArrayProp, path, EPSG = 4326, Format = 'GTiff'):
     dst_filename = path

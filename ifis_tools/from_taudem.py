@@ -45,7 +45,7 @@ def read_raster(path_map,isDEMorDIR=False,dxp=None, noDataP = None,isDIR = False
     Mapa=direction.ReadAsArray()
     direction.FlushCache()
     del direction
-    return Mapa.astype(float),[ncols,nrows,xll,yll,dx,dy,noData],EPSG_code
+    return Mapa.T.astype(float),[ncols,nrows,xll,yll,dx,dy,noData],EPSG_code
 
 def save_array2raster(Array, ArrayProp, path, EPSG = 4326, Format = 'GTiff'):
     dst_filename = path
@@ -177,6 +177,19 @@ class network:
         points_ranked = gp.sjoin(self.network_centroids, rain_ranks, how = 'left', op = 'within')
         self.rain_ranks = points_ranked
         print('4. ranks obtained results stored in self.rain_ranks')
+    
+    def rain2links(self, path_rain):
+        '''Converts a grid (tif) file of rainfall to the shape of the network 
+        using the lookup table obtained by *get_rainfall_lookup*'''
+        #Read and transform rainfall to its ranks
+        rain, p, ep = ft.read_raster(path_rain)
+        rain = rain.T
+        rain = rain.reshape(rain.size)
+        #Put the rinfall in links 
+        self.rain_ranks['rain'] = 0
+        self.rain_ranks['rain'] = rain[self.rain_ranks['FID']]
+        # Return the links and the rainfall 
+        return self.rain_ranks['rain']
     
     def write_rvr(self, path, sub_net = None):
         '''Writes and rvr file based on a network extracted from the base network'''
