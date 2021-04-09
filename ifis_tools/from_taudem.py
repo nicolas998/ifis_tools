@@ -2,6 +2,7 @@ import pandas as pd
 import geopandas as gp
 import numpy as np 
 import pylab as pl 
+from struct import pack, unpack
 import gdal
 from osgeo import ogr
 import osgeo
