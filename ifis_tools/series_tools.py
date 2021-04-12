@@ -26,7 +26,10 @@ from read_dat import *
 from scipy import stats as sta
 from multiprocessing import Pool
 import glob
-import h5py
+try:
+    import h5py
+except:
+    print('no h5py module, cant read HLM hdf snapshots')
 from scipy.signal import find_peaks as __find_peaks__
 from hydroeval import evaluator, kge, nse, pbias
 # ## Digital filters
