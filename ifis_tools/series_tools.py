@@ -26,6 +26,7 @@ from read_dat import *
 from scipy import stats as sta
 from multiprocessing import Pool
 import glob
+import h5py
 from scipy.signal import find_peaks as __find_peaks__
 from hydroeval import evaluator, kge, nse, pbias
 # ## Digital filters
@@ -68,6 +69,15 @@ def read_dat_file(path, date_start,state = 0, freq = '60min'):
     
     return pd.DataFrame(data[:,state,:].T, index=dates, columns=cont)
 
+def read_hdf(path):
+    '''Reads an hdf usually written by the model as a snapshot, 
+    returns a pandas dataFrame with the results'''
+    f = h5py.File(path,'r')
+    df = pd.DataFrame(f['snapshot'][:])
+    df.set_index('link_id', inplace = True)
+    f.close()
+    return df
+    
 
 class performance:
 
