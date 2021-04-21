@@ -242,8 +242,8 @@ class network:
                 'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435}
             self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','AREA':'%.5f',
                 'vh':'%.4f','a_r':'%.4f','a':'%.2e','b':'%.1f','c':'%.2e','d':'%.1f',
-                    'k3':'%.2e','ki_fac':'%.2f','TopDepth':'%.1f','NoFlow':'%.2f','Td':'%d',
-                    'Beta':'%.2f','lambda1':'%.2f','lambda2':'%.1f','vo':'%.3f'}
+                    'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%d',
+                    'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f'}
         self.prm = self.prm.assign(**attr)
         
     def write_prm(self, path):
