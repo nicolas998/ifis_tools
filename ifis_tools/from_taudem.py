@@ -239,11 +239,11 @@ class network:
         if model == 608:
             attr = {'vh':0.02,'a_r':1.67,'a':3.2e-6,'b':17,'c':5.4e-7,'d':32,
                 'k3':2.045e-6,'ki_fac':0.07,'TopDepth':0.1,'NoFlow':1.48,'Td':999,
-                'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435}
+                'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435,'expo':3}
             self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','AREA':'%.5f',
                 'vh':'%.4f','a_r':'%.4f','a':'%.2e','b':'%.1f','c':'%.2e','d':'%.1f',
                     'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%d',
-                    'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f'}
+                    'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f','expo':'%.2f'}
         self.prm = self.prm.assign(**attr)
         
     def write_prm(self, path):
