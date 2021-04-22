@@ -242,7 +242,7 @@ class network:
                 'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435,'expo':3}
             self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','AREA':'%.5f',
                 'vh':'%.4f','a_r':'%.4f','a':'%.2e','b':'%.1f','c':'%.2e','d':'%.1f',
-                    'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%d',
+                    'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%.2f',
                     'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f','expo':'%.2f'}
         self.prm = self.prm.assign(**attr)
         
