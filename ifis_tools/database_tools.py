@@ -289,16 +289,12 @@ def WEB_usgs4assim(usgs_code, link, fi, ff):
     qu['unix_time'] = u
     return qu[['unix_time','discharge','link']]
     
-def SQL_Write_stream4HLM(usgs, link, year,table_name, schema, fi = None, ff = None):
+def SQL_Write_stream4HLM(q, year,table_name, schema, fi = None, ff = None):
     if fi is None:
         fi = str(year) + '-01-01 00:00'
     if ff is None:
         ff = str(year) + '-12-31 23:59'
     #Reads the data from the web
-    try:
-        q = WEB_usgs4assim(str(usgs), link, fi, ff)
-    except:
-        q = WEB_usgs4assim('0' + str(usgs), link, fi, ff)
     eng = sqlalchemy.create_engine("postgresql://"+data_usr+":"+data_pass+"@"+data_host+":"+data_port+"/"+data_base)
     conn = eng.connect()
     q.to_sql(table_name,conn, schema = schema, index = False, chunksize=1000, if_exists = 'append',
