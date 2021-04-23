@@ -24,7 +24,10 @@ from datetime import datetime
 from climata.usgs import InstantValueIO, DailyValueIO
 import numpy as np 
 from ifis_tools import auxiliar as aux
+import sqlalchemy
+import sqlalchemy.types as sqt
 
+print('warning: to use the data base tool you must set the following variables: data_usr, data_pass. \nAlso you can change:data_host, data_base, data_port')
 data_usr = None
 data_pass = None
 data_host = "s-iihr51.iihr.uiowa.edu"
@@ -273,4 +276,33 @@ def SQL_Get_WatershedFromMaster(linkID, otherParams = None):
     BasinData = pd.read_sql(q, con, index_col='link_id')
     con.close()
     return BasinData.rename(columns={'up_area': "Acum", 'area':'Area', 'length':'Long'})
+
+
+def WEB_usgs4assim(usgs_code, link, fi, ff):
+    qu = WEB_Get_USGS(usgs_code, fi,ff)
+    qu = qu.interpolate().resample('1H').mean()
+    qu = qu.to_frame()
+    qu.rename(columns={0:'discharge'}, inplace=True)
+    qu['discharge'] = qu['discharge'].interpolate()
+    u = list(map(aux.__datetime2unix__,qu.index))
+    qu['link'] = link
+    qu['unix_time'] = u
+    return qu[['unix_time','discharge','link']]
     
+def SQL_Write_stream4HLM(usgs, link, year,table_name, schema, fi = None, ff = None):
+    if fi is None:
+        fi = str(year) + '-01-01 00:00'
+    if ff is None:
+        ff = str(year) + '-12-31 23:59'
+    #Reads the data from the web
+    try:
+        q = WEB_usgs4assim(str(usgs), link, fi, ff)
+    except:
+        q = WEB_usgs4assim('0' + str(usgs), link, fi, ff)
+    eng = sqlalchemy.create_engine("postgresql://"+data_usr+":"+data_pass+"@"+data_host+":"+data_port+"/"+data_base)
+    conn = eng.connect()
+    q.to_sql(table_name,conn, schema = schema, index = False, chunksize=1000, if_exists = 'append',
+        dtype = {'unix_time': sqt.INTEGER,
+        'discharge':sqt.FLOAT,
+        'link':sqt.INTEGER})
+    conn.close()
