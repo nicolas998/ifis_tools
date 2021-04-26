@@ -366,6 +366,8 @@ class performance:
             TimePeak = []
         Qmean = []
         Area = []
+        meanRatio = []
+        stdRatio = []
 
         #Iterate in all the models
         for k in self.analysis_dic.keys():
@@ -406,24 +408,30 @@ class performance:
                     KGE.append(self.__func_KGE__(qot, qst))
                     PBIAS.append(self.__func_pbias__(qot, qst)*-1)
                     NASH.append(self.__func_nse__(qot, qst))
+                    #Mean sn std ratios
+                    meanRatio.append(self.__func_KGE_mean__(qot,qst))
+                    stdRatio.append(self.__func_KGE_std__(qot,qst))
 
         #Set up to include or not to include rain analysis.
         if self.__has_rain__:
             columns = ['product','qpeak','qmean','Imax','qpeakDiff',
-                       'tpeak','tpeakDiff','kge','nse', 'pbias','up_area']
+                       'tpeak','tpeakDiff','kge','nse', 'pbias','mean_ratio','std_ratio','up_area']
             ListProducts = [product, Qpeak, Qmean,RainPeak, QpeakMDiff,
-                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS, Area]
+                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS, meanRatio, stdRatio, Area]
             formats = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
                        'nse':'float', 'pbias':'float',
-                       'Imax':'float','qmean':'float', 'up_area':'float'}
+                       'Imax':'float','qmean':'float',
+                       'mean_ratio':'float','std_ratio':'float', 'up_area':'float'}
         else:
             columns = ['product','qpeak','qmean','qpeakDiff',
-                       'tpeakDiff','kge','nse', 'pbias','up_area']
+                       'tpeakDiff','kge','nse', 'pbias','mean_ratio','std_ratio','up_area']
             ListProducts = [product, Qpeak, Qmean,QpeakMDiff,
-                            QpeakTDiff, KGE, NASH, PBIAS, Area]
+                            QpeakTDiff, KGE, NASH, PBIAS, meanRatio, stdRatio, Area]
             formats = {'qpeak':'float','qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
                        'nse':'float',
-                       'pbias':'float','qmean':'float','up_area':'float'}
+                       'pbias':'float',
+                       'mean_ratio':'float','std_ratio':'float',
+                       'qmean':'float','up_area':'float'}
         #Convert to a Data frame with the results.
         D = pd.DataFrame(np.array(ListProducts).T, index = Dates, columns = columns, )
         D = D.astype(formats)
