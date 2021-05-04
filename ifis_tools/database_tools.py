@@ -35,7 +35,7 @@ data_base = "research_environment"
 data_port = "5435"
 
 # +
-def DataBaseConnect(user = "iihr_student", password = "iihr.student", host = data_host,
+def DataBaseConnect(user = "iihr_student", password =data_pass, host = data_host,
     port = "5435", database = "research_environment"):
     '''Connect to the database that hsa stored the usgs information'''
     con = psycopg2.connect(user = user,
@@ -129,7 +129,7 @@ def SQL_USGS_at_IFIS():
     '''Return the list of the usgs stations in the IFIS system and the linkID where they 
     belong.'''
     #make the connection
-    con = DataBaseConnect(user = 'nicolas', password = '10A28Gir0')
+    con = DataBaseConnect(user = data_usr, password = data_pass)
     #Query for the stations
     query = sql.SQL("SELECT foreign_id,link_id FROM pers_felipe.pois_adv_geom where type in (2,3) and foreign_id like '0%' AND link_id < 620000")
     #make the consult
@@ -147,7 +147,7 @@ def SQL_USGS_at_IFIS():
 def SQL_USGS_at_MATC():
     '''Return the list of stations that are in the databse pers_nico (matc).'''
     #make the connection
-    con = DataBaseConnect(user = 'nicolas', password = '10A28Gir0')
+    con = DataBaseConnect(user = data_usr, password = data_pass)
     #Make the query
     query = sql.SQL("SELECT DISTINCT(usgs_id) FROM pers_nico.data_usgs_2008")
     cur = con.cursor()
@@ -160,7 +160,7 @@ def SQL_USGS_at_MATC():
 def SQL_Get_linkArea(linkID, upArea = True):
     '''Obtains the up area for a link ID'''
     #The query and the obtentions
-    con = DataBaseConnect('nicolas','10A28Gir0',database='restore_res_env_92')
+    con = DataBaseConnect(data_usr,data_pass,database='restore_res_env_92')
     cur = con.cursor()
     if upArea:
         q = sql.SQL("SELECT up_area FROM public.env_master_km where link_id="+str(linkID))
@@ -173,7 +173,7 @@ def SQL_Get_linkArea(linkID, upArea = True):
     return A[0][0]
 
 def SQL_Get_Coordinates(linkID):
-    con = DataBaseConnect(user='nicolas',password='10A28Gir0')
+    con = DataBaseConnect(user=data_usr,password=data_pass)
     cur = con.cursor()
     LatLng = {}
     query = sql.SQL('SELECT lat, lng FROM pers_felipe.pois_adv_geom where link_id = '+str(linkID))
@@ -228,7 +228,7 @@ def SQL_Get_MeanRainfall(linkID, date1, date2):
     Returns:
         - Rainfall: Pandas series with the mean rainfall in the basin.'''
     #SEt the connection
-    con = DataBaseConnect(user='nicolas', password='10A28Gir0', database='rt_precipitation')
+    con = DataBaseConnect(user=data_usr, password=data_pass, database='rt_precipitation')
     #Transform dates to unix 
     unix1 = str(aux.__datetime2unix__(date1))
     unix2 = str(aux.__datetime2unix__(date2))
@@ -251,7 +251,7 @@ def SQL_Get_WatershedFromMaster(linkID, otherParams = None):
     The otherParams is a list with the names stand for other parameters that can also be obtained from the querty
     Other names are: [k_i,k_dry, h_b, topsoil_thickness, k_d, slope]'''
     #Obtains the connection 
-    con = DataBaseConnect(user='nicolas', password='10A28Gir0')
+    con = DataBaseConnect(user=data_usr, password=data_pass)
     #Set up the data that will ask for 
     text1 = "WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM pers_nico.master_lambda_vo AS nodeX, pers_nico.master_lambda_vo AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(linkID)+") SELECT link_id, up_area/1e6 as up_area, area/1e6 as area, length/1000. as length" 
     text2 = "FROM pers_nico.master_lambda_vo WHERE link_id IN (SELECT * FROM subbasin)"
