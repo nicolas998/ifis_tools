@@ -394,21 +394,22 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         f.close()
 
 
-    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1):
+    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1), queue = 'IFC':
         '''Writes the .sh file that runs the model
         Parameters:
             - path: path where the run file is stored.
             - process: dictionary with the parameters for each process to be launch:
                 eg: proc = {'Global1.gbl':{'nproc': 12, 'secondplane': True}}
             - ncores: Number of cores.
-            - nsplit: Total number of cores for each group.'''
+            - nsplit: Total number of cores for each group.
+            - queue: name of the argon queue to run the process'''
         #Define the size of the group of cores
         if nCores%nSplit == 0:
             Groups = int(nCores / nSplit)
         else:
             Groups = int(nCores / 2)
         #Define the header text.
-        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe smp '+str(nCores)+'\n####$ -l mf=16G\n#$ -q IFC\n\n/bin/echo Running on host: `hostname`.\n/bin/echo In directory: `pwd`\n/bin/echo Starting on: `date`\n']
+        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe smp '+str(nCores)+'\n####$ -l mf=16G\n#$ -q '+str(queue)+'\n\n/bin/echo Running on host: `hostname`.\n/bin/echo In directory: `pwd`\n/bin/echo Starting on: `date`\n']
         f = open(path,'w',  newline='\n')
         f.write(L[0])
         f.write('\n')
