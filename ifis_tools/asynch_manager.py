@@ -394,7 +394,7 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         f.close()
 
 
-    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1), queue = 'IFC':
+    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1, queue = 'IFC'):
         '''Writes the .sh file that runs the model
         Parameters:
             - path: path where the run file is stored.
