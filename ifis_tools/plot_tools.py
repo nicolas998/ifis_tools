@@ -13,6 +13,29 @@ colors = {
     'contrast' : ['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33','#a65628','#f781bf','#999999'],
 }
 
+def plot2(link,dicQ, step = 500, start =0 , end =-1, intersect = [0,1],path = None, name = None):
+    fig = pl.figure(figsize=(15,5))
+    ax = fig.add_subplot(111)    
+    keys = list(dicQ.keys())
+    indx1 = dicQ[keys[intersect[0]]]['q'][link].index
+    indx2 = dicQ[keys[intersect[1]]]['q'][link].index
+    idx = indx1.intersection(indx2)
+    for k in dicQ.keys():
+        d = dicQ[k]
+        indx = d['q'][link].loc[idx].index
+        val = d['q'][link].loc[idx].values
+        d['type'](indx,val,**d['args'])
+    ax.set_xlim(indx[start], indx[end])
+    ax.set_xticks(indx[start:end:step])
+    ax.legend(loc = 0, fontsize = 'xx-large')
+    if name:
+        ax.text(0.005,1.03,name, transform=ax.transAxes, size=20,bbox=dict(facecolor='gray', alpha=0.4))
+    ax.set_ylabel('Streamflow [$m^3 \cdot s^{-1}$]', size = 20)    
+    ax.tick_params(labelsize = 18)    
+    ax.grid()
+    if path is not None:
+        pl.savefig(path, bbox_inches = 'tight')
+
 def PlotSeries(Data, date_s, date_e, xname = 'Streamflow [m3 s-1]', 
   yname = 'Time [h]', width = 700, height = 400):
     

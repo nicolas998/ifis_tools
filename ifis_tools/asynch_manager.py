@@ -99,7 +99,7 @@ def UpdateGlobal(filename, DictUpdates):
 class hlmModel:
 
     def __init__(self,linkid=None, path = None, ExtraParams = None, model_uid = 604,
-        build_rvr = True):
+        build_rvr = True, base_table = None):
         '''Depending on the linkid or in the path the class starts a table
         to set up a new project fro HLM model.
             - linkid = number of link id to search for in the database.
@@ -107,15 +107,20 @@ class hlmModel:
             - ExtraParams: name of external params stored in the dataBase.
             - model_uid: the id of the model at the global.
             - build_rvr: if there is going to be an rvr or already exists.
+            - base_table: a hlmModel object that covers all the domain and that can be used to copy the prm values (linnid = 0)
         Optional:
             -ExtraParams: List with the names of the extra params extracted from the database'''
         #Type of model to be used 
         self.model_uid = model_uid
         #Make an action depending on each case.
         if build_rvr:
-            if linkid is not None and path is None:
-                self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams)
+            if linkid is not None and path is None:                
                 self.linkid = linkid
+                self.get_topo()
+                if base_table is not None:                    
+                    self.Table = base_table.Table.loc[self.topo['link_id']]
+                else:
+                    self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams)
             elif path is not None and linkid is None:
                 self.wmfBasin = wmf.SimuBasin(rute=path)
                 self.wmfBasin.GetGeo_Cell_Basics()
@@ -202,7 +207,8 @@ class hlmModel:
         MeanRain[np.isnan(MeanRain) == True] = 0.0
         return MeanRain
 
-    def write_rvr(self, path = None, database = 'rt_precipitation'):
+    def get_topo(self):
+        '''Obtains the property topology or self.topo that describes the structure of the watershed'''
         #conncet to the database
         con = db.DataBaseConnect(user = 'nicolas', password = '10A28Gir0',)
         #restore_res_env_92
@@ -221,6 +227,28 @@ class hlmModel:
 
         self.topo = pd.read_sql(q, con)
         con.close()
+        self.topo.drop_duplicates('link_id', inplace = True)
+
+    def write_rvr(self, path = None, database = 'rt_precipitation'):
+        #conncet to the database
+        # con = db.DataBaseConnect(user = 'nicolas', password = '10A28Gir0',)
+        # #restore_res_env_92
+        # #Query to ask for the link ids and the topology
+        # if self.linkid > 0:
+        #     q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
+        #      SELECT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
+        #      WHERE (all_links.id IN (SELECT nodeX.link_id FROM pers_nico.master_lambda_vo AS nodeX, \
+        #      pers_nico.master_lambda_vo AS parentX \
+        #      WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(self.linkid)+")) AND pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id")
+        # elif self.linkid == 0:
+        #     q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
+        #     SELECT DISTINCT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
+        #     WHERE all_links.id > 1 AND pers_nico.master_lambda_vo.model AND \
+        #     pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id;")
+
+        # self.topo = pd.read_sql(q, con)
+        # con.close()
+        # self.topo.drop_duplicates('link_id', inplace = True)
         topo = self.topo.values.T
         #Convert the query to a rvr file 
         if path is not None:
