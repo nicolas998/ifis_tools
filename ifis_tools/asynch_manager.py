@@ -176,7 +176,9 @@ class hlmModel:
         #Databse connection and query.
         unix1 = str(aux.__datetime2unix__(date1))
         unix2 = str(aux.__datetime2unix__(date2))
-        con = db.DataBaseConnect(database='rt_precipitation')
+        con = db.DataBaseConnect(user = db.data_usr, 
+                                 password = db.data_pass,
+                                 database='rt_precipitation')
         if self.linkid > 0:
             q = db.sql.SQL("WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM students.env_master_km \
          AS nodeX, students.env_master_km AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) \
