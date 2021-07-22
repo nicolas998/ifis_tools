@@ -40,7 +40,7 @@ $prmType $prmFile
 $initialType $initialFile
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
-2
+3
 
 %Rain
 $rainType $rainPath
@@ -54,6 +54,9 @@ $unix1 $unix2
 0
 
 %Reservoir ids (0 = no reservoirs, 1 = .rsv, 2 = .dbc file)
+0
+
+%
 0
 
 %Where to put write hydrographs
