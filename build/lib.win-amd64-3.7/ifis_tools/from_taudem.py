@@ -135,17 +135,25 @@ def saveBin(lid, lid_vals, count, fn):
 
 class network:
     
-    def __init__(self, path_or_geo):
-        if type(path_or_geo) is str:
-            self.network = gp.read_file(path_or_geo)
-            self.network['link'] = self.network['LINKNO']
-            self.network.set_index('LINKNO', inplace=True)
-            self.network['AREA'] = (self.network['DSContArea'] - self.network['USContArea']) / 1e6
-            self.network_centroids = None
-            self.network_ranks = None
-        elif type(path_or_geo) is gp.geodataframe.GeoDataFrame:
-            self.network = path_or_geo.copy()
-        
+    def __init__(self, net_path, hills_path = None, hills_epsg = 2163):
+        '''Defines the network class that contains all the requirements to set up a project for
+        hlm'''
+        #Defines the initial partameters for the network
+        self.network = gp.read_file(net_path)        
+        self.network['link'] = self.network['LINKNO']
+        self.network.set_index('LINKNO', inplace=True)            
+        self.network_centroids = None
+        self.network_ranks = None
+        #computes the area for each hillslope
+        if hills_path is not None:
+            self.hills = gp.read_file(hills_path)
+            self.hills.rename(columns={'DN':'link'}, inplace = True)
+            self.hills.set_index('link', inplace = True)
+            self.hills.to_crs(epsg = hills_epsg, inplace = True)
+            idx = self.hills.index.intersection(self.network.index)
+            self.network['area'] = self.hills.loc[idx].geometry.area
+            print('Area of each hillslope computed from the hills shapefile')
+            
     
     def network2points(self):
         '''Converts the network elements to centroids, ideal to get the 
@@ -245,11 +253,11 @@ class network:
         if model == 608:
             attr = {'vh':0.02,'a_r':1.67,'a':3.2e-6,'b':17,'c':5.4e-7,'d':32,
                 'k3':2.045e-6,'ki_fac':0.07,'TopDepth':0.1,'NoFlow':1.48,'Td':999,
-                'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435,'expo':3}
+                'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435}
             self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','AREA':'%.5f',
                 'vh':'%.4f','a_r':'%.4f','a':'%.2e','b':'%.1f','c':'%.2e','d':'%.1f',
                     'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%.2f',
-                    'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f','expo':'%.2f'}
+                    'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f'}
         self.prm = self.prm.assign(**attr)
         
     def write_prm(self, path):
