@@ -246,6 +246,7 @@ class network:
 
         for_prm.loc[for_prm['Length'] == 0, 'Length'] = 1
         for_prm.loc[for_prm['area'] == 0, 'area'] = 1/1e4
+        for_prm.loc[np.isnan(for_prm.prm['area']), 'area'] = 1/1e4
         for_prm['Length'] = for_prm['Length'] / 1000
         self.prm = for_prm
         
@@ -258,10 +259,11 @@ class network:
                 'vh':'%.4f','a_r':'%.4f','a':'%.2e','b':'%.1f','c':'%.2e','d':'%.1f',
                     'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%.2f',
                     'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f'}
+            self.prm = self.prm.assign(**attr)
         elif model == 254 or model == 253 or model == 256:
             self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','area':'%.5f'}
             
-        self.prm = self.prm.assign(**attr)
+        
         
     def write_prm(self, path):
         with open(path,'w',newline='\n') as f:
