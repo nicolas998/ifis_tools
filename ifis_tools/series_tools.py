@@ -80,7 +80,13 @@ def read_hdf(path):
     df.set_index('link_id', inplace = True)
     f.close()
     return df
-    
+
+
+def read_bin(path):
+    return np.fromfile(path,
+                       dtype=np.dtype([('lid', np.int32),
+                                       ('val', np.float32)]) ,
+                       offset=4,)    
 
 class performance:
 
