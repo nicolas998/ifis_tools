@@ -75,7 +75,7 @@ elif os.name == 'nt':
 #Read the global files that are used to generate new globals
 #try:
 Globals = {}
-for g in ['190','254','60X']:
+for g in ['190','254','60X','XXX']:
     # 190 global base format 
     f = open(Path+g+'BaseGlobal.gbl','r')
     Globals.update({g:f.readlines()})
