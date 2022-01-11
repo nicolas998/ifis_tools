@@ -138,21 +138,27 @@ class network:
     def __init__(self, net_path, hills_path = None, hills_epsg = 2163):
         '''Defines the network class that contains all the requirements to set up a project for
         hlm'''
-        #Defines the initial partameters for the network
-        self.network = gp.read_file(net_path)        
-        self.network['link'] = self.network['LINKNO']
-        self.network.set_index('LINKNO', inplace=True)            
-        self.network_centroids = None
-        self.network_ranks = None
-        #computes the area for each hillslope
-        if hills_path is not None:
-            self.hills = gp.read_file(hills_path)
-            self.hills.rename(columns={'DN':'link'}, inplace = True)
-            self.hills.set_index('link', inplace = True)
-            self.hills.to_crs(epsg = hills_epsg, inplace = True)
-            idx = self.hills.index.intersection(self.network.index)
-            self.network['area'] = self.hills.loc[idx].geometry.area/1e6
-            print('Area of each hillslope computed from the hills shapefile')
+        if type(net_path) is str:
+            #Defines the initial partameters for the network
+            self.network = gp.read_file(net_path)        
+            self.network['link'] = self.network['LINKNO']
+            self.network.set_index('LINKNO', inplace=True)            
+            self.network_centroids = None
+            self.network_ranks = None
+            #computes the area for each hillslope
+            if hills_path is not None:
+                self.hills = gp.read_file(hills_path)
+                self.hills.rename(columns={'DN':'link'}, inplace = True)
+                self.hills.set_index('link', inplace = True)
+                self.hills.to_crs(epsg = hills_epsg, inplace = True)
+                idx = self.hills.index.intersection(self.network.index)
+                self.network['area'] = self.hills.loc[idx].geometry.area/1e6
+                print('Area of each hillslope computed from the hills shapefile')
+            else:
+                self.hills = None
+        elif type(net_path) is gp.geodataframe.GeoDataFrame:
+            self.network = net_path.copy()
+            
             
     
     def network2points(self):
@@ -237,7 +243,12 @@ class network:
                 lista.append(self.network.loc[link, 'USLINKNO1'])
                 lista.append(self.network.loc[link, 'USLINKNO2'])
             count += 1
-        return network(self.network.loc[lista])
+        idx_links = self.network.index.intersection(lista)
+        if self.hills is not None:
+            idx_hills = self.hills.index.intersection(lista)
+            return network(self.network.loc[idx_links], self.hills.loc[idx_hills])
+        else:
+            return network(self.network.loc[idx_links])
     
     def get_prm(self):
         for_prm = self.network[['DSContArea','Length','area']]
