@@ -305,6 +305,167 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
             f.write(t)
             f.close()
 
+    def add_forcing(self,name='Rain',ftype=5,file='',
+                    batch=10, timestep=60,
+                    date1='', date2=''):
+        '''This functions is mean to be used with the global format XXX in self.write_Global'''
+        #Creates the forcing dictionary
+        try:
+            type(self.forcings)
+        except:
+            self.forcings = {}
+        #converts time to unix 
+        unix1 = aux.__datetime2unix__(date1)
+        unix2 = aux.__datetime2unix__(date2)
+        #Creates the forcing template
+        forcing = '%$Name\n$Ftype $file\n$Batch $TimeStep $unix1 $unix2'
+        base = Template(forcing)
+        #Creates the forcing text
+        f = base.safe_substitute({'Name':name,'Ftype':ftype,'file':file,'Batch':batch,
+                               'TimeStep':timestep,'unix1':unix1,'unix2':unix2})
+        text = ''
+        for i in f.split('\n'):
+            t = ' '.join(i.split())
+            text+=t+'\n'
+        #Update the forcings dictionary with the created forcing
+        self.forcings.update({name:text})
+        
+    
+    def write_GlobalV2(self, path2global, model_uid = 604, global_fmt = '60X',global_param = None, gparam_fmt =None,
+        date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,
+        initialType = 1, datResults = None, nComponents = 1, Components = [0], 
+        controlFile = None, baseGlobal = None, noWarning = False, snapType = 0,
+        snapPath = '', snapTime = '', evpFromSysPath = False):
+        '''Creates a global file for the current project.
+            - model_uid: is the number of hte model goes from 601 to 604.
+            - date1 and date2: initial date and end date
+            - rvrFile: path to rvr file.
+            - rvrType: 0: .rvr file, 1: databse .dbc file.
+            - rvrLink: 0: all the domain, N: number of the linkid.
+            - prmFile: path to prm file.
+            - prmType: 0: .prm file, 1: databse .dbc file.
+            - initialFile: path to file with initial conditions.
+            - initialType: type of initial file:
+                - 0: ini, 1: uini, 2: rec, 3: .dbc
+            - rainType: number inficating the type of the rain to be used.
+                - 1: plain text with rainfall data for each link.
+                - 3: Database.
+                - 4: Uniform storm file: .ustr
+                - 5: Binary data with the unix time
+            - rainPath: path to the folder containning the binary files of the rain.
+                or path to the file with the dabase
+            - evpFile: path to the file with the values of the evp.
+            - datResults: File where .dat files will be written.
+            - nComponents: Number of results to put in the .dat file.
+            - Components: Number of each component to write: [0,1,2,...,N]
+            - controlFile: File with the number of the links to write.
+            - baseGlobal: give the option to use a base global that is not the default
+            - snapType: type of snapshot to make with the model:
+                - 0: no snapshot, 1: .rec file, 2: to database, 3: to hdf5, 4:
+                    recurrent hdf5
+            - snapPath: path to the snapshot.
+            - snapTime: time interval between snapshots (min)
+            - evpFromSysPath: add the path of the system to the evp file.'''
+        #Grab the forcings 
+        if len(self.forcings.values()):
+            forcings = ''
+            nForcings = len(self.forcings.values())
+            for c, k in enumerate(self.forcings.keys()):
+                if c < len(self.forcings.values())-1:
+                    forcings+=self.forcings[k]+'\n'
+                else:
+                    forcings+=self.forcings[k]
+        else:
+            print('Warning: no forcings seyt up please use the self.add_forcing function')
+            return 1
+        #Function fto parse number global params to text 
+        def params2text(params, fmt):
+            t = []
+            for i,j in zip(params, fmt):
+                t.append(j % i)
+            return ' '.join(t)
+        #convert global params if they exist
+        if global_fmt == 'XXX':
+            if global_param is not None and gparam_fmt is not None:
+                nGlobals = len(global_param)
+                global_param = params2text(global_param, gparam_fmt)            
+        #Open the base global file and creates tyhe template
+        if baseGlobal is not None:
+            f = open(baseGlobal, 'r')
+            L = f.readlines()
+            f.close()
+        else:
+            L = am.Globals[global_fmt]
+        t = []
+        for i in L:
+            t += i
+        Base = Template(''.join(t))
+        #Chang  the evp path 
+        if evpFromSysPath:
+            evpFile = Path + evpFile
+        # Creates the default Dictionary.
+        Default = {
+            'model_uid' : model_uid,
+            'date1': date1,
+            'date2': date2,
+            'rvrFile': rvrFile,
+            'rvrType': str(rvrType),
+            'rvrLink': str(rvrLink),
+            'prmFile': prmFile,
+            'prmType': str(prmType),
+            'initialFile': initialFile,
+            'initialType': initialType,
+            'datResults': datResults,
+            'controlFile': controlFile,
+            'snapType': str(snapType),
+            'snapPath': snapPath,
+            'snapTime': str(snapTime),
+            'nComp': str(nComponents),
+            'NGlobals': str(nGlobals),
+            'Global_param':global_param,
+            'nForcings':str(nForcings),
+            'Forcings': forcings
+        }
+        if date1 is not None:
+            Default.update({'unix1': aux.__datetime2unix__(Default['date1'])})
+        else:
+            Default.update({'unix1': '$'+'unix1'})
+        if date2 is not None:
+            Default.update({'unix2': aux.__datetime2unix__(Default['date2'])})
+        else:
+            Default.update({'unix2': '$'+'unix2'})
+        #Update the list of components to write
+        for n, c in enumerate(Components):
+            Default.update({'Comp'+str(n): 'State'+str(c)})
+        if nComponents <= 9:
+            for c in range(9-nComponents):
+                Default.update({'Comp'+str(8-c): 'XXXXX'})
+        #Check for parameters left undefined
+        D = {}
+        for k in Default.keys():
+            if Default[k] is not None:
+                D.update({k: Default[k]})
+            else:
+                if noWarning:
+                    print('Warning: parameter ' + k +' left undefined model wont run')
+                D.update({k: '$'+k})
+        #Update parameter on the base and write global 
+        f = open(path2global,'w', newline='\n')
+        f.writelines(Base.safe_substitute(D))
+        f.close()
+        #Erase unused print components
+        f = open(path2global,'r')
+        L = f.readlines()
+        f.close()
+        flag = True
+        while flag:
+            try:
+                L.remove('XXXXX\n')
+            except:
+                flag = False
+        f = open(path2global,'w', newline='\n')
+        f.writelines(L)
+        f.close()
 
     def write_Global(self, path2global, model_uid = 604,
         date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,

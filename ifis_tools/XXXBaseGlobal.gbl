@@ -40,22 +40,9 @@ $prmType $prmFile
 $initialType $initialFile
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
-4
+$nForcings
 
-%Rain
-$rainType $rainPath
-10 60 $unix1 $unix2 
-
-%Evaporation
-7 $evpFile
-$unix1 $unix2 
-
-%Reservoir feed 
-0
-
-%Snowmelt
-$snowType $snowPath
-10 60 $unix1 $unix2
+$Forcings
 
 %Dam (0 = no dam, 1 = .dam, 2 = .qvs)
 0
@@ -65,7 +52,7 @@ $snowType $snowPath
 
 %Where to put write hydrographs
 %(0 = no output, 1 = .dat file, 2 = .csv file, 3 = database, 5 = .h5 packet, 6 = .h5 array)
-1 60 $datResults
+1 $datInterval $datResults
 
 %Where to put peakflow data
 %(0 = no output, 1 = .pea file, 2 = database)
@@ -74,7 +61,6 @@ $snowType $snowPath
 %.sav files for hydrographs and peak file
 %(0 = save no data, 1 = .sav file, 2 = .dbc file, 3 = all links)
 1 $controlFile %Hydrographs
-3 %Peakflows
 
 %Snapshot information (0 = none, 1 = to .rec file, 2 = to database, 3 = to .h5 file, 4 = to recurrent .h5 file)
 $snapType $snapTime $snapPath
