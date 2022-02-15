@@ -96,7 +96,7 @@ def save_array2raster(Array, ArrayProp, path, EPSG = 4326, Format = 'GTiff'):
     #Coloca el nodata
     band = dataset.GetRasterBand(1)
     if ArrayProp[-1] is None:
-        band.SetNoDataValue(wmf.cu.nodata.astype(int).max())
+        band.SetNoDataValue(-9999)
     else:
         band.SetNoDataValue(int(ArrayProp[-1]))
     #Guarda el mapa
