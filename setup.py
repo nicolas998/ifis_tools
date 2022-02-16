@@ -19,5 +19,5 @@ setup(
     license='LICENSE.txt',
     description='Watershed Modelling Framework',
     long_description=open('README.md').read(),
-    ext_modules=[ext,]
+    #ext_modules=[ext,]
 	)

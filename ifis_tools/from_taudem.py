@@ -235,7 +235,7 @@ class network:
                 f.write('\n')
             f.close()
         
-    def get_subnet(self, link):
+    def get_subnet(self, link, get_divisory=False):
         '''Allows to define a new network inside of the base network'''
         lista = [link]
         count = 0
@@ -248,9 +248,13 @@ class network:
         idx_links = self.network.index.intersection(lista)
         if self.hills is not None:
             idx_hills = self.hills.index.intersection(lista)
-            return network(self.network.loc[idx_links], self.hills.loc[idx_hills])
+            new_net = network(self.network.loc[idx_links], self.hills.loc[idx_hills])
+            if get_divisory:
+                new_net.hills['loc_id'] = link
+                new_net.divisory = new_net.hills.dissolve(by='loc_id')                
         else:
-            return network(self.network.loc[idx_links])
+            new_net = network(self.network.loc[idx_links])
+        return new_net
     
     def get_prm(self):
         for_prm = self.network[['DSContArea','Length','area']]
