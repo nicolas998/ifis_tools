@@ -158,6 +158,8 @@ class network:
                 self.hills = None
         elif type(net_path) is gp.geodataframe.GeoDataFrame:
             self.network = net_path.copy()
+            if type(hills_path) is gp.geodataframe.GeoDataFrame:
+                self.hills = hills_path.copy()
             
             
     
