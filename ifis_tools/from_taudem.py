@@ -263,7 +263,7 @@ class network:
 
         for_prm.loc[for_prm['Length'] == 0, 'Length'] = 1
         for_prm.loc[for_prm['area'] == 0, 'area'] = 1/1e4
-        for_prm.loc[np.isnan(for_prm.prm['area']), 'area'] = 1/1e4
+        for_prm.loc[np.isnan(for_prm['area']), 'area'] = 1/1e4
         for_prm['Length'] = for_prm['Length'] / 1000
         self.prm = for_prm
         
