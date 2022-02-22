@@ -2,7 +2,8 @@
 import os
 from numpy.distutils.core import setup, Extension
 
-ext = Extension(name='read_dat', sources = ['ifis_tools/read_dat.f90'])
+ext = Extension(name='read_dat', sources = ['ifis_tools/read_dat.f90'],
+    extra_compile_args = ['-std=gnu99'])
 
 #os.system('jupytext --set-formats jupyter_scripts//ipynb,ifis_tools//py --sync jupyter_scripts/*.ipynb')
 
