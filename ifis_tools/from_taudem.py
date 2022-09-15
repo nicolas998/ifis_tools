@@ -168,6 +168,36 @@ class network:
             self.network = net_path.copy()
             if type(hills_path) is gp.geodataframe.GeoDataFrame:
                 self.hills = hills_path.copy()
+    
+    def write_watershed_json(self, link, path, buff_dist = 0.01, simplify_tol = 20, num_decimals=6):
+        #Get the subwatershed 
+        n2 = self.get_subnet(link)
+        idx = self.hills.index.intersection(n2.network.index)
+        h2 = self.hills.loc[idx]
+        #print('1. Subwatershed identified')
+        h2['lid'] = 1
+        h2 = h2.dissolve(by='lid')
+        #print('2. Hillslopes dissolved')
+        b = h2.buffer(distance=buff_dist)
+        #print('3. Buffer done')
+        b = b.simplify(tolerance = simplify_tol)
+        #print('4. Simplification done')
+        b = b.to_crs(epsg='4326')    
+        b = b.to_json()
+        b = json.loads(b)
+        #print('5. Converted to json')
+        #Reduces the number of coordinates and their number of decimal points
+        b['features'][0]['geometry']['coordinates'][0] = [[np.round(cor[0],num_decimals), np.round(cor[1],num_decimals),]  for cor in b['features'][0]['geometry']['coordinates'][0]]
+        old_cor = b['features'][0]['geometry']['coordinates'][0]
+        new_cor = [old_cor[0]]
+        for i in range(1,len(old_cor)):
+            if old_cor[i] != new_cor[-1]:
+                new_cor.append(old_cor[i])
+        b['features'][0]['geometry']['coordinates'] = [new_cor]
+        with open(path, 'w') as f:
+            json.dump(b, f,separators=[',',':'])
+
+    
             
     def get_subwatersheds(self, minOrder=6, maxiter = 10000):        
         #Define function that finds upstream links
