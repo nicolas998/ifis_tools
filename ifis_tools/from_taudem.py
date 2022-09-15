@@ -2,9 +2,13 @@ import pandas as pd
 import geopandas as gp
 import numpy as np 
 import pylab as pl 
+import os
 from struct import pack, unpack
 import io
-import gdal
+try:
+    import gdal
+except:
+    from osgeo import gdal
 from osgeo import ogr
 import osgeo
 #from wmf import wmf 
@@ -139,24 +143,28 @@ class network:
         '''Defines the network class that contains all the requirements to set up a project for
         hlm'''
         if type(net_path) is str:
-            #Defines the initial partameters for the network
-            self.network = gp.read_file(net_path)        
-            self.network['link'] = self.network['LINKNO']
-            self.network.set_index('LINKNO', inplace=True)            
-            self.network_centroids = None
-            self.network_ranks = None
-            #computes the area for each hillslope
-            if hills_path is not None:
-                self.hills = gp.read_file(hills_path)
-                self.hills.rename(columns={'DN':'link'}, inplace = True)
-                self.hills.set_index('link', inplace = True)
-                self.hills.to_crs(epsg = hills_epsg, inplace = True)
-                idx = self.hills.index.intersection(self.network.index)
-                self.network['area'] = self.hills.loc[idx].geometry.area/1e6
-                print('Area of each hillslope computed from the hills shapefile')
-            else:
+            if os.path.splitext(net_path)[-1] == '.csv':
+                self.network = pd.read_csv(net_path, index_col='link')
                 self.hills = None
-        elif type(net_path) is gp.geodataframe.GeoDataFrame:
+            else:    
+                #Defines the initial partameters for the network
+                self.network = gp.read_file(net_path)        
+                self.network['link'] = self.network['LINKNO']
+                self.network.set_index('LINKNO', inplace=True)            
+                self.network_centroids = None
+                self.network_ranks = None
+                #computes the area for each hillslope
+                if hills_path is not None:
+                    self.hills = gp.read_file(hills_path)
+                    self.hills.rename(columns={'DN':'link'}, inplace = True)
+                    self.hills.set_index('link', inplace = True)
+                    self.hills.to_crs(epsg = hills_epsg, inplace = True)
+                    idx = self.hills.index.intersection(self.network.index)
+                    self.network['area'] = self.hills.loc[idx].geometry.area/1e6
+                    print('Area of each hillslope computed from the hills shapefile')
+                else:
+                    self.hills = None
+        elif type(net_path) is gp.geodataframe.GeoDataFrame or type(net_path) is pd.core.frame.DataFrame:
             self.network = net_path.copy()
             if type(hills_path) is gp.geodataframe.GeoDataFrame:
                 self.hills = hills_path.copy()
@@ -295,8 +303,8 @@ class network:
         for_prm['DSContArea'] = for_prm['DSContArea'] / 1e6
         for_prm.shape[0] == self.network.shape[0]
 
-        for_prm.loc[for_prm['Length'] == 0, 'Length'] = 1
-        for_prm.loc[for_prm['area'] == 0, 'area'] = 1/1e4
+        for_prm.loc[for_prm['Length'] < 1, 'Length'] = 1
+        for_prm.loc[for_prm['area'] < 1/1e4, 'area'] = 1/1e4
         for_prm.loc[np.isnan(for_prm['area']), 'area'] = 1/1e4
         for_prm['Length'] = for_prm['Length'] / 1000
         self.prm = for_prm

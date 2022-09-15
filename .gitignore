@@ -25,3 +25,6 @@ build/temp.win-amd64-3.7/Release/ifis_tools/read_dat.o
 build/temp.win-amd64-3.7/Release/read_dat.mod
 build/lib/ifis_tools/series_tools.py
 build/lib/ifis_tools/series_tools.py
+build/*
+*egg*
+__pycache__

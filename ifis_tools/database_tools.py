@@ -21,7 +21,10 @@ import psycopg2
 from psycopg2 import sql
 import pandas as pd 
 from datetime import datetime
-from climata.usgs import InstantValueIO, DailyValueIO
+try:
+    from climata.usgs import InstantValueIO, DailyValueIO
+except:
+    print('Warning: climata not installed cant use the functions to get USGS data')
 import numpy as np 
 from ifis_tools import auxiliar as aux
 import sqlalchemy
