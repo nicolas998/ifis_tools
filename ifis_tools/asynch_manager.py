@@ -99,7 +99,7 @@ def UpdateGlobal(filename, DictUpdates):
 class hlmModel:
 
     def __init__(self,linkid=None, path = None, ExtraParams = None, model_uid = 604,
-        build_rvr = True, base_table = None):
+        build_rvr = True, base_table = None, data_usr = None, data_pwd = None):
         '''Depending on the linkid or in the path the class starts a table
         to set up a new project fro HLM model.
             - linkid = number of link id to search for in the database.
@@ -120,7 +120,7 @@ class hlmModel:
                 if base_table is not None:                    
                     self.Table = base_table.Table.loc[self.topo['link_id']]
                 else:
-                    self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams)
+                    self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams, data_usr, data_pwd)
             elif path is not None and linkid is None:
                 self.wmfBasin = wmf.SimuBasin(rute=path)
                 self.wmfBasin.GetGeo_Cell_Basics()

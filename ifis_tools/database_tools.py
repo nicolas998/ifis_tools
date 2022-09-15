@@ -246,7 +246,7 @@ def SQL_Get_MeanRainfall(linkID, date1, date2):
 
 # -
 
-def SQL_Get_WatershedFromMaster(linkID, otherParams = None):
+def SQL_Get_WatershedFromMaster(linkID, otherParams = None, data_usr = data_usr, data_pass = data_pwd):
     '''Obtains the params files records for a watershed based on its linkID.
     The otherParams is a list with the names stand for other parameters that can also be obtained from the querty
     Other names are: [k_i,k_dry, h_b, topsoil_thickness, k_d, slope]'''

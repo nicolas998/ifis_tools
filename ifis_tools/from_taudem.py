@@ -161,7 +161,41 @@ class network:
             if type(hills_path) is gp.geodataframe.GeoDataFrame:
                 self.hills = hills_path.copy()
             
-            
+    def get_subwatersheds(self, minOrder=6, maxiter = 10000):        
+        #Define function that finds upstream links
+        def find_parent_links(link, mOrder = 6,maxnum = 1000):
+            i = 0
+            if c2.loc[c2['link'] == link,'strmOrder'].values[0] == mOrder:
+                return []
+            while i<maxnum:
+                i+=1        
+                lp = c2.loc[c2['link'] == link,['USLINKNO1','USLINKNO2']].values[0]        
+                if (c2.loc[c2['link'] == lp[0]].shape[0] == 1) and (c2.loc[c2['link'] == lp[1]].shape[0] == 1):
+                    return lp.tolist()
+                else:
+                    for l in lp:
+                        if c2.loc[c2['link'] == l].shape[0] == 1:
+                            link = l     
+        
+        #Work with a network that has the streams above minOrder
+        c2 = self.network[self.network['strmOrder'] >= minOrder]
+        #Find the outlet
+        outlet = c2.loc[c2['USContArea'] == c2['USContArea'].max()].index.values[0]
+        #Get the list of links that belong to partitions inside the watershed 
+        link_list = [outlet]
+        for link in link_list:    
+            link_list.extend(find_parent_links(link, mOrder=minOrder, maxnum=maxiter))            
+        print('1. Parent links found')
+        #Assign the ids corresponding to each of the subwatershed
+        name = 'subw_%d' % minOrder
+        self.network[name] = 1
+        net_t = self.network.loc[link_list]
+        cont = 2
+        for link in net_t.sort_values('USContArea',ascending=False).index[1:]:
+            c2 = self.get_subnet(link)
+            self.network.loc[c2.network.index,name] = cont
+            cont+=1
+        print('2. Sub-watershed ids assigned to links, find results in column %s of self.network' % name)        
     
     def network2points(self):
         '''Converts the network elements to centroids, ideal to get the 
