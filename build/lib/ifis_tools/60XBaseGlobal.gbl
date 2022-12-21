@@ -40,7 +40,7 @@ $prmType $prmFile
 $initialType $initialFile
 
 %Forcings (0 = none, 1 = .str, 2 = binary, 3 = database, 4 = .ustr, 5 = forecasting, 6 = .gz binary, 7 = recurring)
-2
+4
 
 %Rain
 $rainType $rainPath
@@ -49,6 +49,13 @@ $rainType $rainPath
 %Evaporation
 7 $evpFile
 $unix1 $unix2 
+
+%Reservoir feed 
+0
+
+%Snowmelt
+$snowType $snowPath
+10 60 $unix1 $unix2
 
 %Dam (0 = no dam, 1 = .dam, 2 = .qvs)
 0

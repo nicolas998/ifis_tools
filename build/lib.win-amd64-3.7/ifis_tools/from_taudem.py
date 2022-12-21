@@ -96,7 +96,7 @@ def save_array2raster(Array, ArrayProp, path, EPSG = 4326, Format = 'GTiff'):
     #Coloca el nodata
     band = dataset.GetRasterBand(1)
     if ArrayProp[-1] is None:
-        band.SetNoDataValue(wmf.cu.nodata.astype(int).max())
+        band.SetNoDataValue(-9999)
     else:
         band.SetNoDataValue(int(ArrayProp[-1]))
     #Guarda el mapa
@@ -138,21 +138,29 @@ class network:
     def __init__(self, net_path, hills_path = None, hills_epsg = 2163):
         '''Defines the network class that contains all the requirements to set up a project for
         hlm'''
-        #Defines the initial partameters for the network
-        self.network = gp.read_file(net_path)        
-        self.network['link'] = self.network['LINKNO']
-        self.network.set_index('LINKNO', inplace=True)            
-        self.network_centroids = None
-        self.network_ranks = None
-        #computes the area for each hillslope
-        if hills_path is not None:
-            self.hills = gp.read_file(hills_path)
-            self.hills.rename(columns={'DN':'link'}, inplace = True)
-            self.hills.set_index('link', inplace = True)
-            self.hills.to_crs(epsg = hills_epsg, inplace = True)
-            idx = self.hills.index.intersection(self.network.index)
-            self.network['area'] = self.hills.loc[idx].geometry.area
-            print('Area of each hillslope computed from the hills shapefile')
+        if type(net_path) is str:
+            #Defines the initial partameters for the network
+            self.network = gp.read_file(net_path)        
+            self.network['link'] = self.network['LINKNO']
+            self.network.set_index('LINKNO', inplace=True)            
+            self.network_centroids = None
+            self.network_ranks = None
+            #computes the area for each hillslope
+            if hills_path is not None:
+                self.hills = gp.read_file(hills_path)
+                self.hills.rename(columns={'DN':'link'}, inplace = True)
+                self.hills.set_index('link', inplace = True)
+                self.hills.to_crs(epsg = hills_epsg, inplace = True)
+                idx = self.hills.index.intersection(self.network.index)
+                self.network['area'] = self.hills.loc[idx].geometry.area/1e6
+                print('Area of each hillslope computed from the hills shapefile')
+            else:
+                self.hills = None
+        elif type(net_path) is gp.geodataframe.GeoDataFrame:
+            self.network = net_path.copy()
+            if type(hills_path) is gp.geodataframe.GeoDataFrame:
+                self.hills = hills_path.copy()
+            
             
     
     def network2points(self):
@@ -227,7 +235,7 @@ class network:
                 f.write('\n')
             f.close()
         
-    def get_subnet(self, link):
+    def get_subnet(self, link, get_divisory=False):
         '''Allows to define a new network inside of the base network'''
         lista = [link]
         count = 0
@@ -237,28 +245,40 @@ class network:
                 lista.append(self.network.loc[link, 'USLINKNO1'])
                 lista.append(self.network.loc[link, 'USLINKNO2'])
             count += 1
-        return network(self.network.loc[lista])
+        idx_links = self.network.index.intersection(lista)
+        if self.hills is not None:
+            idx_hills = self.hills.index.intersection(lista)
+            new_net = network(self.network.loc[idx_links], self.hills.loc[idx_hills])
+            if get_divisory:
+                new_net.hills['loc_id'] = link
+                new_net.divisory = new_net.hills.dissolve(by='loc_id')                
+        else:
+            new_net = network(self.network.loc[idx_links])
+        return new_net
     
     def get_prm(self):
-        for_prm = self.network[['DSContArea','Length','AREA']]
+        for_prm = self.network[['DSContArea','Length','area']]
         for_prm['DSContArea'] = for_prm['DSContArea'] / 1e6
         for_prm.shape[0] == self.network.shape[0]
 
         for_prm.loc[for_prm['Length'] == 0, 'Length'] = 1
-        for_prm.loc[for_prm['AREA'] == 0, 'AREA'] = 1/1e4
+        for_prm.loc[for_prm['area'] == 0, 'area'] = 1/1e4
+        for_prm.loc[np.isnan(for_prm['area']), 'area'] = 1/1e4
         for_prm['Length'] = for_prm['Length'] / 1000
         self.prm = for_prm
         
     def set_prm_for_model(self, model = 608):
-        if model == 608:
+        if model == 608 or model == 609:
             attr = {'vh':0.02,'a_r':1.67,'a':3.2e-6,'b':17,'c':5.4e-7,'d':32,
                 'k3':2.045e-6,'ki_fac':0.07,'TopDepth':0.1,'NoFlow':1.48,'Td':999,
                 'Beta':1.67,'lambda1':0.4,'lambda2':-0.1,'vo':0.435}
-            self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','AREA':'%.5f',
+            self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','area':'%.5f',
                 'vh':'%.4f','a_r':'%.4f','a':'%.2e','b':'%.1f','c':'%.2e','d':'%.1f',
                     'k3':'%.2e','ki_fac':'%.3f','TopDepth':'%.3f','NoFlow':'%.3f','Td':'%.2f',
                     'Beta':'%.3f','lambda1':'%.3f','lambda2':'%.2f','vo':'%.3f'}
-        self.prm = self.prm.assign(**attr)
+            self.prm = self.prm.assign(**attr)
+        elif model == 254 or model == 253 or model == 256:
+            self.prm_format = {'DSContArea':'%.3f','Length':'%.3f','area':'%.5f'}
         
     def write_prm(self, path):
         with open(path,'w',newline='\n') as f:
@@ -269,6 +289,153 @@ class network:
                     fm = self.prm_format[k]+' '
                     f.write(fm % c)
                 f.write('\n\n')
+                
+    def write_Global(self, path2global, model_uid = 604,
+        date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,
+        initialType = 1,rainType = 5, rainPath = None, evpFile = 'evap.mon', datResults = None,
+        nComponents = 1, Components = [0], controlFile = None, baseGlobal = None, noWarning = False, snapType = 0,
+        snapPath = '', snapTime = '', evpFromSysPath = False):
+        '''Creates a global file for the current project.
+            - model_uid: is the number of hte model goes from 601 to 604.
+            - date1 and date2: initial date and end date
+            - rvrFile: path to rvr file.
+            - rvrType: 0: .rvr file, 1: databse .dbc file.
+            - rvrLink: 0: all the domain, N: number of the linkid.
+            - prmFile: path to prm file.
+            - prmType: 0: .prm file, 1: databse .dbc file.
+            - initialFile: path to file with initial conditions.
+            - initialType: type of initial file:
+                - 0: ini, 1: uini, 2: rec, 3: .dbc
+            - rainType: number inficating the type of the rain to be used.
+                - 1: plain text with rainfall data for each link.
+                - 3: Database.
+                - 4: Uniform storm file: .ustr
+                - 5: Binary data with the unix time
+            - rainPath: path to the folder containning the binary files of the rain.
+                or path to the file with the dabase
+            - evpFile: path to the file with the values of the evp.
+            - datResults: File where .dat files will be written.
+            - nComponents: Number of results to put in the .dat file.
+            - Components: Number of each component to write: [0,1,2,...,N]
+            - controlFile: File with the number of the links to write.
+            - baseGlobal: give the option to use a base global that is not the default
+            - snapType: type of snapshot to make with the model:
+                - 0: no snapshot, 1: .rec file, 2: to database, 3: to hdf5, 4:
+                    recurrent hdf5
+            - snapPath: path to the snapshot.
+            - snapTime: time interval between snapshots (min)
+            - evpFromSysPath: add the path of the system to the evp file.'''
+        #Open the base global file and creates tyhe template
+        if baseGlobal is not None:
+            f = open(baseGlobal, 'r')
+            L = f.readlines()
+            f.close()
+        else:
+            L = Globals['60X']
+        t = []
+        for i in L:
+            t += i
+        Base = Template(''.join(t))
+        # Databse rainfall 
+        if rainType == 3 and rainPath is None:
+            rainPath = '/Dedicated/IFC/model_eval/forcing_rain51_5435_s4.dbc'
+        if rvrType == 1 and rvrFile is None:
+            rvrFile = '/Dedicated/IFC/model_eval/topo51.dbc'
+        #Chang  the evp path 
+        if evpFromSysPath:
+            evpFile = Path + evpFile
+        # Creates the default Dictionary.
+        Default = {
+            'model_uid' : model_uid,
+            'date1': date1,
+            'date2': date2,
+            'rvrFile': rvrFile,
+            'rvrType': str(rvrType),
+            'rvrLink': str(rvrLink),
+            'prmFile': prmFile,
+            'prmType': str(prmType),
+            'initialFile': initialFile,
+            'initialType': initialType,
+            'rainType': str(rainType),
+            'rainPath': rainPath,
+            'evpFile': evpFile,
+            'datResults': datResults,
+            'controlFile': controlFile,
+            'snapType': str(snapType),
+            'snapPath': snapPath,
+            'snapTime': str(snapTime),
+            'nComp': str(nComponents)
+        }
+        if date1 is not None:
+            Default.update({'unix1': aux.__datetime2unix__(Default['date1'])})
+        else:
+            Default.update({'unix1': '$'+'unix1'})
+        if date2 is not None:
+            Default.update({'unix2': aux.__datetime2unix__(Default['date2'])})
+        else:
+            Default.update({'unix2': '$'+'unix2'})
+        #Update the list of components to write
+        for n, c in enumerate(Components):
+            Default.update({'Comp'+str(n): 'State'+str(c)})
+        if nComponents <= 9:
+            for c in range(9-nComponents):
+                Default.update({'Comp'+str(8-c): 'XXXXX'})
+        #Check for parameters left undefined
+        D = {}
+        for k in Default.keys():
+            if Default[k] is not None:
+                D.update({k: Default[k]})
+            else:
+                if noWarning:
+                    print('Warning: parameter ' + k +' left undefined model wont run')
+                D.update({k: '$'+k})
+        #Update parameter on the base and write global 
+        f = open(path2global,'w', newline='\n')
+        f.writelines(Base.substitute(D))
+        f.close()
+        #Erase unused print components
+        f = open(path2global,'r')
+        L = f.readlines()
+        f.close()
+        flag = True
+        while flag:
+            try:
+                L.remove('XXXXX\n')
+            except:
+                flag = False
+        f = open(path2global,'w', newline='\n')
+        f.writelines(L)
+        f.close()
+
+
+    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1, queue = 'IFC'):
+        '''Writes the .sh file that runs the model
+        Parameters:
+            - path: path where the run file is stored.
+            - process: dictionary with the parameters for each process to be launch:
+                eg: proc = {'Global1.gbl':{'nproc': 12, 'secondplane': True}}
+            - ncores: Number of cores.
+            - nsplit: Total number of cores for each group.
+            - queue: name of the argon queue to run the process'''
+        #Define the size of the group of cores
+        if nCores%nSplit == 0:
+            Groups = int(nCores / nSplit)
+        else:
+            Groups = int(nCores / 2)
+        #Define the header text.
+        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe smp '+str(nCores)+'\n####$ -l mf=16G\n#$ -q '+str(queue)+'\n\n/bin/echo Running on host: `hostname`.\n/bin/echo In directory: `pwd`\n/bin/echo Starting on: `date`\n']
+        f = open(path,'w',  newline='\n')
+        f.write(L[0])
+        f.write('\n')
+
+        for k in process.keys():
+            secondplane = ' \n'
+            if process[k]['secondplane']:
+                secondplane = ' &\n'
+            if process[k]['nproc'] > nCores:
+                process[k]['nproc'] = nCores        
+            f.write('mpirun -np '+str(process[k]['nproc'])+' /Users/nicolas/Tiles/dist/bin/asynch '+k+secondplane)
+        f.close()
 
         
         

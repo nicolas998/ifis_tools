@@ -75,7 +75,7 @@ elif os.name == 'nt':
 #Read the global files that are used to generate new globals
 #try:
 Globals = {}
-for g in ['190','254','60X']:
+for g in ['190','254','60X','XXX']:
     # 190 global base format 
     f = open(Path+g+'BaseGlobal.gbl','r')
     Globals.update({g:f.readlines()})
@@ -99,7 +99,7 @@ def UpdateGlobal(filename, DictUpdates):
 class hlmModel:
 
     def __init__(self,linkid=None, path = None, ExtraParams = None, model_uid = 604,
-        build_rvr = True):
+        build_rvr = True, base_table = None, data_usr = None, data_pwd = None):
         '''Depending on the linkid or in the path the class starts a table
         to set up a new project fro HLM model.
             - linkid = number of link id to search for in the database.
@@ -107,15 +107,20 @@ class hlmModel:
             - ExtraParams: name of external params stored in the dataBase.
             - model_uid: the id of the model at the global.
             - build_rvr: if there is going to be an rvr or already exists.
+            - base_table: a hlmModel object that covers all the domain and that can be used to copy the prm values (linnid = 0)
         Optional:
             -ExtraParams: List with the names of the extra params extracted from the database'''
         #Type of model to be used 
         self.model_uid = model_uid
         #Make an action depending on each case.
         if build_rvr:
-            if linkid is not None and path is None:
-                self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams)
+            if linkid is not None and path is None:                
                 self.linkid = linkid
+                self.get_topo()
+                if base_table is not None:                    
+                    self.Table = base_table.Table.loc[self.topo['link_id']]
+                else:
+                    self.Table = db.SQL_Get_WatershedFromMaster(linkid, ExtraParams, data_usr, data_pwd)
             elif path is not None and linkid is None:
                 self.wmfBasin = wmf.SimuBasin(rute=path)
                 self.wmfBasin.GetGeo_Cell_Basics()
@@ -171,7 +176,9 @@ class hlmModel:
         #Databse connection and query.
         unix1 = str(aux.__datetime2unix__(date1))
         unix2 = str(aux.__datetime2unix__(date2))
-        con = db.DataBaseConnect(database='rt_precipitation')
+        con = db.DataBaseConnect(user = db.data_usr, 
+                                 password = db.data_pass,
+                                 database='rt_precipitation')
         if self.linkid > 0:
             q = db.sql.SQL("WITH subbasin AS (SELECT nodeX.link_id AS link_id FROM students.env_master_km \
          AS nodeX, students.env_master_km AS parentX WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) \
@@ -202,7 +209,8 @@ class hlmModel:
         MeanRain[np.isnan(MeanRain) == True] = 0.0
         return MeanRain
 
-    def write_rvr(self, path = None, database = 'rt_precipitation'):
+    def get_topo(self):
+        '''Obtains the property topology or self.topo that describes the structure of the watershed'''
         #conncet to the database
         con = db.DataBaseConnect(user = 'nicolas', password = '10A28Gir0',)
         #restore_res_env_92
@@ -221,6 +229,28 @@ class hlmModel:
 
         self.topo = pd.read_sql(q, con)
         con.close()
+        self.topo.drop_duplicates('link_id', inplace = True)
+
+    def write_rvr(self, path = None, database = 'rt_precipitation'):
+        #conncet to the database
+        # con = db.DataBaseConnect(user = 'nicolas', password = '10A28Gir0',)
+        # #restore_res_env_92
+        # #Query to ask for the link ids and the topology
+        # if self.linkid > 0:
+        #     q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
+        #      SELECT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
+        #      WHERE (all_links.id IN (SELECT nodeX.link_id FROM pers_nico.master_lambda_vo AS nodeX, \
+        #      pers_nico.master_lambda_vo AS parentX \
+        #      WHERE (nodeX.left BETWEEN parentX.left AND parentX.right) AND parentX.link_id = "+str(self.linkid)+")) AND pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id")
+        # elif self.linkid == 0:
+        #     q = db.sql.SQL("WITH all_links(id) AS (SELECT link_id FROM pers_nico.master_lambda_vo) \
+        #     SELECT DISTINCT all_links.id,pers_nico.master_lambda_vo.link_id FROM pers_nico.master_lambda_vo,all_links \
+        #     WHERE all_links.id > 1 AND pers_nico.master_lambda_vo.model AND \
+        #     pers_nico.master_lambda_vo.parent_link = all_links.id ORDER BY all_links.id;")
+
+        # self.topo = pd.read_sql(q, con)
+        # con.close()
+        # self.topo.drop_duplicates('link_id', inplace = True)
         topo = self.topo.values.T
         #Convert the query to a rvr file 
         if path is not None:
@@ -275,6 +305,167 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
             f.write(t)
             f.close()
 
+    def add_forcing(self,name='Rain',ftype=5,file='',
+                    batch=10, timestep=60,
+                    date1='', date2=''):
+        '''This functions is mean to be used with the global format XXX in self.write_Global'''
+        #Creates the forcing dictionary
+        try:
+            type(self.forcings)
+        except:
+            self.forcings = {}
+        #converts time to unix 
+        unix1 = aux.__datetime2unix__(date1)
+        unix2 = aux.__datetime2unix__(date2)
+        #Creates the forcing template
+        forcing = '%$Name\n$Ftype $file\n$Batch $TimeStep $unix1 $unix2'
+        base = Template(forcing)
+        #Creates the forcing text
+        f = base.safe_substitute({'Name':name,'Ftype':ftype,'file':file,'Batch':batch,
+                               'TimeStep':timestep,'unix1':unix1,'unix2':unix2})
+        text = ''
+        for i in f.split('\n'):
+            t = ' '.join(i.split())
+            text+=t+'\n'
+        #Update the forcings dictionary with the created forcing
+        self.forcings.update({name:text})
+        
+    
+    def write_GlobalV2(self, path2global, model_uid = 604, global_fmt = '60X',global_param = None, gparam_fmt =None,
+        date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,
+        initialType = 1, datResults = None, nComponents = 1, Components = [0], 
+        controlFile = None, baseGlobal = None, noWarning = False, snapType = 0,
+        snapPath = '', snapTime = '', evpFromSysPath = False):
+        '''Creates a global file for the current project.
+            - model_uid: is the number of hte model goes from 601 to 604.
+            - date1 and date2: initial date and end date
+            - rvrFile: path to rvr file.
+            - rvrType: 0: .rvr file, 1: databse .dbc file.
+            - rvrLink: 0: all the domain, N: number of the linkid.
+            - prmFile: path to prm file.
+            - prmType: 0: .prm file, 1: databse .dbc file.
+            - initialFile: path to file with initial conditions.
+            - initialType: type of initial file:
+                - 0: ini, 1: uini, 2: rec, 3: .dbc
+            - rainType: number inficating the type of the rain to be used.
+                - 1: plain text with rainfall data for each link.
+                - 3: Database.
+                - 4: Uniform storm file: .ustr
+                - 5: Binary data with the unix time
+            - rainPath: path to the folder containning the binary files of the rain.
+                or path to the file with the dabase
+            - evpFile: path to the file with the values of the evp.
+            - datResults: File where .dat files will be written.
+            - nComponents: Number of results to put in the .dat file.
+            - Components: Number of each component to write: [0,1,2,...,N]
+            - controlFile: File with the number of the links to write.
+            - baseGlobal: give the option to use a base global that is not the default
+            - snapType: type of snapshot to make with the model:
+                - 0: no snapshot, 1: .rec file, 2: to database, 3: to hdf5, 4:
+                    recurrent hdf5
+            - snapPath: path to the snapshot.
+            - snapTime: time interval between snapshots (min)
+            - evpFromSysPath: add the path of the system to the evp file.'''
+        #Grab the forcings 
+        if len(self.forcings.values()):
+            forcings = ''
+            nForcings = len(self.forcings.values())
+            for c, k in enumerate(self.forcings.keys()):
+                if c < len(self.forcings.values())-1:
+                    forcings+=self.forcings[k]+'\n'
+                else:
+                    forcings+=self.forcings[k]
+        else:
+            print('Warning: no forcings seyt up please use the self.add_forcing function')
+            return 1
+        #Function fto parse number global params to text 
+        def params2text(params, fmt):
+            t = []
+            for i,j in zip(params, fmt):
+                t.append(j % i)
+            return ' '.join(t)
+        #convert global params if they exist
+        if global_fmt == 'XXX':
+            if global_param is not None and gparam_fmt is not None:
+                nGlobals = len(global_param)
+                global_param = params2text(global_param, gparam_fmt)            
+        #Open the base global file and creates tyhe template
+        if baseGlobal is not None:
+            f = open(baseGlobal, 'r')
+            L = f.readlines()
+            f.close()
+        else:
+            L = am.Globals[global_fmt]
+        t = []
+        for i in L:
+            t += i
+        Base = Template(''.join(t))
+        #Chang  the evp path 
+        if evpFromSysPath:
+            evpFile = Path + evpFile
+        # Creates the default Dictionary.
+        Default = {
+            'model_uid' : model_uid,
+            'date1': date1,
+            'date2': date2,
+            'rvrFile': rvrFile,
+            'rvrType': str(rvrType),
+            'rvrLink': str(rvrLink),
+            'prmFile': prmFile,
+            'prmType': str(prmType),
+            'initialFile': initialFile,
+            'initialType': initialType,
+            'datResults': datResults,
+            'controlFile': controlFile,
+            'snapType': str(snapType),
+            'snapPath': snapPath,
+            'snapTime': str(snapTime),
+            'nComp': str(nComponents),
+            'NGlobals': str(nGlobals),
+            'Global_param':global_param,
+            'nForcings':str(nForcings),
+            'Forcings': forcings
+        }
+        if date1 is not None:
+            Default.update({'unix1': aux.__datetime2unix__(Default['date1'])})
+        else:
+            Default.update({'unix1': '$'+'unix1'})
+        if date2 is not None:
+            Default.update({'unix2': aux.__datetime2unix__(Default['date2'])})
+        else:
+            Default.update({'unix2': '$'+'unix2'})
+        #Update the list of components to write
+        for n, c in enumerate(Components):
+            Default.update({'Comp'+str(n): 'State'+str(c)})
+        if nComponents <= 9:
+            for c in range(9-nComponents):
+                Default.update({'Comp'+str(8-c): 'XXXXX'})
+        #Check for parameters left undefined
+        D = {}
+        for k in Default.keys():
+            if Default[k] is not None:
+                D.update({k: Default[k]})
+            else:
+                if noWarning:
+                    print('Warning: parameter ' + k +' left undefined model wont run')
+                D.update({k: '$'+k})
+        #Update parameter on the base and write global 
+        f = open(path2global,'w', newline='\n')
+        f.writelines(Base.safe_substitute(D))
+        f.close()
+        #Erase unused print components
+        f = open(path2global,'r')
+        L = f.readlines()
+        f.close()
+        flag = True
+        while flag:
+            try:
+                L.remove('XXXXX\n')
+            except:
+                flag = False
+        f = open(path2global,'w', newline='\n')
+        f.writelines(L)
+        f.close()
 
     def write_Global(self, path2global, model_uid = 604,
         date1 = None, date2 = None, rvrFile = None, rvrType = 0, rvrLink = 0, prmFile = None, prmType = 0, initialFile = None,
@@ -394,25 +585,22 @@ FROM pers_felipe_initial_conditions.initialconditions_"+str(year)+" order by lin
         f.close()
 
 
-    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1):
+    def write_runfile(self, path, process, jobName = 'job',nCores = 56, nSplit = 1, queue = 'IFC'):
         '''Writes the .sh file that runs the model
         Parameters:
             - path: path where the run file is stored.
             - process: dictionary with the parameters for each process to be launch:
                 eg: proc = {'Global1.gbl':{'nproc': 12, 'secondplane': True}}
             - ncores: Number of cores.
-            - nsplit: Total number of cores for each group.'''
+            - nsplit: Total number of cores for each group.
+            - queue: name of the argon queue to run the process'''
         #Define the size of the group of cores
         if nCores%nSplit == 0:
             Groups = int(nCores / nSplit)
         else:
             Groups = int(nCores / 2)
         #Define the header text.
-        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe '+str(Groups)+'cpn '+str(nCores)+'\n####$ -l mf=16G\n#$ -q IFC\n\n\
-/bin/echo Running on host: `hostname`.\n\
-/bin/echo In directory: `pwd`\n\
-/bin/echo Starting on: `date`\n']
-
+        L = ['#!/bin/sh\n#$ -N '+jobName+'\n#$ -j y\n#$ -cwd\n#$ -pe smp '+str(nCores)+'\n####$ -l mf=16G\n#$ -q '+str(queue)+'\n\n/bin/echo Running on host: `hostname`.\n/bin/echo In directory: `pwd`\n/bin/echo Starting on: `date`\n']
         f = open(path,'w',  newline='\n')
         f.write(L[0])
         f.write('\n')
@@ -567,7 +755,8 @@ class hlm_dat_process:
             - stages_names: names to put in the DataFrame for each column
             - nickname: name to put to the output files instead of the sim_name.
         Results:
-            - Writes an msgpack with pandas Series item for each link in the dat system'''
+            - Writes an msgpack with pandas Series item for each link in the dat system
+            -search: (1) search the old way (2) does in the new way'''
         #In functions
         def find_sim_name(dat_name, sim_name):
             '''Fuinds the name of a dat_name extracted from the .dat file'''

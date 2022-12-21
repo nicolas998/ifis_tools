@@ -22,10 +22,14 @@
 
 import pandas as pd 
 import numpy as np 
-import read_dat as rd
+from read_dat import *
 from scipy import stats as sta
 from multiprocessing import Pool
 import glob
+try:
+    import h5py
+except:
+    print('no h5py module, cant read HLM hdf snapshots')
 from scipy.signal import find_peaks as __find_peaks__
 from hydroeval import evaluator, kge, nse, pbias
 # ## Digital filters
@@ -55,6 +59,34 @@ def percentiles(obs, sim, steps = 10, bins = None, perc = 50, percMax = 99.5):
         #Y.append(np.percentile(sim[(obs>i) & (obs<=j)], perc))
     return np.vstack([X,Y])
 
+def read_dat_file(path, date_start,state = 0, freq = '60min'):
+    '''Read fast a .dat file produced by HLM and returns a pandas DataFrame
+    Parameters:
+        -path: path to the .dat file.
+        -date_start: starting date of the simulation
+        -State: model state.
+        -freq: Time step of the .dat given in min (ej. 60min).'''
+    Ncon, Nrec,Nstat = read_dat.get_size(path)
+    cont, data = read_dat.get_data(path, Ncon, Nrec, Nstat)
+    dates = pd.date_range(date_start, periods=Nrec, freq=freq)
+    
+    return pd.DataFrame(data[:,state,:].T, index=dates, columns=cont)
+
+def read_hdf(path):
+    '''Reads an hdf usually written by the model as a snapshot, 
+    returns a pandas dataFrame with the results'''
+    f = h5py.File(path,'r')
+    df = pd.DataFrame(f['snapshot'][:])
+    df.set_index('link_id', inplace = True)
+    f.close()
+    return df
+
+
+def read_bin(path):
+    return np.fromfile(path,
+                       dtype=np.dtype([('lid', np.int32),
+                                       ('val', np.float32)]) ,
+                       offset=4,)    
 
 class performance:
 
@@ -160,7 +192,10 @@ class performance:
 
     def __func_KGE__(self, qo, qs):
         '''Gets the KGE for an event'''
-        return evaluator(kge, qs.values, qo.values)[0][0]
+        try:
+            return evaluator(kge, qs.values, qo.values)[0][0]
+        except:
+            return evaluator(kge, qs, qo)[0][0]
 
     def __func_KGE_mean__(self, qo,qs):
         '''Gets the mean ratio difference of the KGE'''
@@ -178,11 +213,17 @@ class performance:
 
     def __func_pbias__(self, qo, qs):
         '''Gets the Percent bias for an event'''
-        return evaluator(pbias, qs.values, qo.values)[0] * (-1)
+        try:
+            return evaluator(pbias, qs.values, qo.values)[0] * (-1)
+        except:
+            return evaluator(pbias, qs, qo)[0] * (-1)
 
     def __func_nse__(self, qo, qs):
         '''Gets the Nash for an event'''
-        return evaluator(nse, qs.values, qo.values)[0]
+        try:
+            return evaluator(nse, qs.values, qo.values)[0]
+        except:
+            return evaluator(nse, qs, qo)[0]
 
     def __func_qpeakTravelTime__(self, q):
         ttime = int(self.link_tt)*4
@@ -331,6 +372,8 @@ class performance:
             TimePeak = []
         Qmean = []
         Area = []
+        meanRatio = []
+        stdRatio = []
 
         #Iterate in all the models
         for k in self.analysis_dic.keys():
@@ -371,24 +414,30 @@ class performance:
                     KGE.append(self.__func_KGE__(qot, qst))
                     PBIAS.append(self.__func_pbias__(qot, qst)*-1)
                     NASH.append(self.__func_nse__(qot, qst))
+                    #Mean sn std ratios
+                    meanRatio.append(self.__func_KGE_mean__(qot,qst))
+                    stdRatio.append(self.__func_KGE_std__(qot,qst))
 
         #Set up to include or not to include rain analysis.
         if self.__has_rain__:
             columns = ['product','qpeak','qmean','Imax','qpeakDiff',
-                       'tpeak','tpeakDiff','kge','nse', 'pbias','up_area']
+                       'tpeak','tpeakDiff','kge','nse', 'pbias','mean_ratio','std_ratio','up_area']
             ListProducts = [product, Qpeak, Qmean,RainPeak, QpeakMDiff,
-                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS, Area]
+                            TimePeak,QpeakTDiff, KGE, NASH, PBIAS, meanRatio, stdRatio, Area]
             formats = {'qpeak':'float','tpeak':'float', 'qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
                        'nse':'float', 'pbias':'float',
-                       'Imax':'float','qmean':'float', 'up_area':'float'}
+                       'Imax':'float','qmean':'float',
+                       'mean_ratio':'float','std_ratio':'float', 'up_area':'float'}
         else:
             columns = ['product','qpeak','qmean','qpeakDiff',
-                       'tpeakDiff','kge','nse', 'pbias','up_area']
+                       'tpeakDiff','kge','nse', 'pbias','mean_ratio','std_ratio','up_area']
             ListProducts = [product, Qpeak, Qmean,QpeakMDiff,
-                            QpeakTDiff, KGE, NASH, PBIAS, Area]
+                            QpeakTDiff, KGE, NASH, PBIAS, meanRatio, stdRatio, Area]
             formats = {'qpeak':'float','qpeakDiff':'float','kge':'float', 'tpeakDiff':'float', 
                        'nse':'float',
-                       'pbias':'float','qmean':'float','up_area':'float'}
+                       'pbias':'float',
+                       'mean_ratio':'float','std_ratio':'float',
+                       'qmean':'float','up_area':'float'}
         #Convert to a Data frame with the results.
         D = pd.DataFrame(np.array(ListProducts).T, index = Dates, columns = columns, )
         D = D.astype(formats)
