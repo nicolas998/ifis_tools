@@ -33,6 +33,8 @@ except:
 from scipy.signal import find_peaks as __find_peaks__
 try:
     from hydroeval import evaluator, kge, nse, pbias
+except:
+    pass
 # ## Digital filters
 #
 # Collection of functions to separate runoff from baseflow.
