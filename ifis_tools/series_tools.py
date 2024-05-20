@@ -31,7 +31,8 @@ try:
 except:
     print('no h5py module, cant read HLM hdf snapshots')
 from scipy.signal import find_peaks as __find_peaks__
-from hydroeval import evaluator, kge, nse, pbias
+try:
+    from hydroeval import evaluator, kge, nse, pbias
 # ## Digital filters
 #
 # Collection of functions to separate runoff from baseflow.
