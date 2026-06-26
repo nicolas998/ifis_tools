@@ -22,7 +22,7 @@
 
 import pandas as pd 
 import numpy as np 
-from read_dat import *
+from ifis_tools.read_dat import read_dat
 from scipy import stats as sta
 from multiprocessing import Pool
 import glob

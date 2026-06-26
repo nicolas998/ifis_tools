@@ -1,0 +1,31 @@
+[build-system]
+build-backend = "mesonpy"
+requires = [
+    "meson-python>=0.15.0",
+    "numpy>=1.26",
+    "ninja",
+]
+
+[project]
+name = "ifis_tools"
+description = "Watershed Modelling Framework"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Nicolas Velasquez G", email = "nicolas.velasquezgiron@gmail.com" },
+]
+dynamic = ["version"]
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+]
+
+[project.optional-dependencies]
+hdf = ["h5py"]
+eval = ["hydroeval"]
+
+[project.urls]
+Homepage = "https://github.com/nicolas998/ifis_tools"
+Repository = "https://github.com/nicolas998/ifis_tools.git"
